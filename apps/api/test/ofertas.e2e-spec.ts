@@ -112,8 +112,8 @@ describe('Ofertas (e2e)', () => {
     ['sin asunto', { mensaje: 'x', segmento: SEGMENTO_LATTE }],
     ['días fuera de rango', { asunto: 'x', mensaje: 'x', segmento: { minCompras: 1, dias: 0 } }],
     ['campo no declarado', { asunto: 'x', mensaje: 'x', segmento: SEGMENTO_LATTE, extra: true }],
-  ])('rechaza %s con 400', (_nombre, cuerpo) => {
-    return post('', cuerpo).expect(400);
+  ])('rechaza %s con 400', async (_nombre, cuerpo) => {
+    await post('', cuerpo).expect(400);
   });
 
   it('exige token de admin', () => {
