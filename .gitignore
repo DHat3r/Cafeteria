@@ -26,4 +26,4 @@ coverage/
 .DS_Store
 Thumbs.db
 *.log
-src/generated/
+apps/api/src/generated/
