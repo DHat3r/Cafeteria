@@ -1,0 +1,17 @@
+# Dependencias locales: se instalan dentro de la imagen con npm ci
+node_modules
+**/node_modules
+
+# Compilados y caches: se generan dentro de la imagen
+**/dist
+**/.next
+
+# Control de versiones y secretos
+.git
+.env
+.env.*
+!.env.example
+
+# Base de datos local y reportes de cobertura
+**/*.db
+**/coverage
