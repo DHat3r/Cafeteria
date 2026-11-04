@@ -1,0 +1,86 @@
+// Modelo de datos del MVP. Detalle de las reglas en docs/PLAN_MVP.md.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Admin {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  creadoEn     DateTime @default(now())
+}
+
+// Correo y teléfono se guardan cifrados (AES-256-GCM). El HMAC permite
+// buscar y asociar ventas sin descifrar.
+model Cliente {
+  id               Int       @id @default(autoincrement())
+  nombre           String
+  correoCifrado    String?
+  correoHmac       String?   @unique
+  telefonoCifrado  String?
+  telefonoHmac     String?   @unique
+  consentimientoEn DateTime
+  bajaEn           DateTime?
+  tokenBaja        String    @unique
+  creadoEn         DateTime  @default(now())
+  ventas           Venta[]
+}
+
+model Importacion {
+  id          Int      @id @default(autoincrement())
+  archivo     String
+  filasLeidas Int
+  importadas  Int
+  duplicadas  Int
+  conError    Int
+  asociadas   Int
+  creadoEn    DateTime @default(now())
+  ventas      Venta[]
+}
+
+// La venta no guarda el contacto en texto plano: solo sus HMAC, para
+// asociarla al cliente aunque se registre después de comprar.
+model Venta {
+  id            Int         @id @default(autoincrement())
+  idExterno     String      @unique
+  fecha         DateTime
+  producto      String
+  cantidad      Int
+  monto         Int
+  correoHmac    String?
+  telefonoHmac  String?
+  clienteId     Int?
+  cliente       Cliente?    @relation(fields: [clienteId], references: [id])
+  importacionId Int
+  importacion   Importacion @relation(fields: [importacionId], references: [id])
+
+  @@index([fecha])
+  @@index([clienteId])
+  @@index([correoHmac])
+  @@index([telefonoHmac])
+}
+
+// Último mapeo de columnas usado por cada fuente (por ahora solo "excel").
+model MapeoColumnas {
+  fuente        String   @id
+  mapeo         String
+  actualizadoEn DateTime @updatedAt
+}
+
+model Oferta {
+  id        Int      @id @default(autoincrement())
+  asunto    String
+  mensaje   String
+  segmento  String
+  enviados  Int
+  fallidos  Int
+  creadoEn  DateTime @default(now())
+}

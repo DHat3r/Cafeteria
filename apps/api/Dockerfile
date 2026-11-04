@@ -16,7 +16,8 @@ RUN npm ci
 # Ahora el codigo fuente y la compilacion
 COPY packages/shared packages/shared
 COPY apps/api apps/api
-RUN npm run build -w @cafeteria/shared && npm run build -w @cafeteria/api
+# El cliente de Prisma no se versiona: se genera a partir de prisma/schema.prisma
+RUN npm run build:shared && npm run build -w @cafeteria/api
 
 # Quitamos las devDependencies para que la etapa final sea mas pequena
 RUN npm prune --omit=dev

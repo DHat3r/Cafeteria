@@ -5,6 +5,8 @@ node_modules
 # Compilados y caches: se generan dentro de la imagen
 **/dist
 **/.next
+# Cliente de Prisma generado: se vuelve a generar dentro de la imagen
+apps/api/src/generated
 
 # Control de versiones y secretos
 .git
