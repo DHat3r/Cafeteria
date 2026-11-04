@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ClientesModule } from './clientes/clientes.module.js';
+import { DashboardModule } from './dashboard/dashboard.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { validarEnv } from './config/env.js';
 import { HealthController } from './health/health.controller.js';
 import { ImportacionesModule } from './importaciones/importaciones.module.js';
+import { OfertasModule } from './ofertas/ofertas.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { SeguridadModule } from './seguridad/seguridad.module.js';
 
@@ -21,6 +23,8 @@ import { SeguridadModule } from './seguridad/seguridad.module.js';
     AuthModule,
     ClientesModule,
     ImportacionesModule,
+    DashboardModule,
+    OfertasModule,
   ],
   controllers: [HealthController],
 })
