@@ -56,7 +56,8 @@ Después de levantarlo:
 
 Notas:
 
-- Los puertos se cambian en `.env`.
+- Los puertos se cambian en `.env`; el QR y los enlaces de baja siguen al puerto de la web. Con un dominio propio, agrega `APP_URL=https://tu-dominio` (y `COOKIE_SECURE=true` si usas HTTPS); ambas están comentadas en `.env.example`.
+- `ADMIN_EMAIL` y `ADMIN_PASSWORD` solo se usan la primera vez, para crear al administrador; cambiarlos después en `.env` no modifica al administrador ya creado.
 - Si Docker Compose se queja de una variable faltante, es porque no se ejecutó el script del paso 1.
 - Las migraciones se aplican solas al arrancar la API. La base SQLite vive en el volumen `datos`.
 
@@ -84,7 +85,7 @@ flowchart LR
     ASOC --> DASH["Dashboard"]
 ```
 
-- La **web** (Next.js) es la única que habla con el navegador. Las Server Actions llaman a la API, así que la API y el token de sesión nunca llegan al navegador.
+- La **web** (Next.js) es la única que habla con el navegador. Las Server Actions llaman a la API desde el servidor, así que el navegador nunca recibe el token de sesión ni la dirección interna de la API. Ojo: `docker compose` publica el puerto 3001 de la API en tu máquina para facilitar el desarrollo; en producción no debería exponerse.
 - La **API** (NestJS) concentra la lógica: registro, importación, dashboard y ofertas.
 - La **base** es un archivo SQLite dentro de un volumen de Docker.
 - Los correos salen por SMTP. En desarrollo, Mailpit los atrapa y no salen de la máquina.
@@ -95,8 +96,8 @@ Más detalle del plan y de las reglas de negocio en `docs/PLAN_MVP.md`.
 
 - **Datos de contacto cifrados:** el correo y el teléfono de los clientes se guardan con AES-256-GCM (IV aleatorio). Un archivo `.db` copiado no revela contactos.
 - **Búsqueda sin texto plano:** los contactos se buscan con HMAC-SHA256 (con una clave aparte). Las ventas guardan solo ese HMAC, nunca el contacto.
-- **Sesión del administrador:** es un JWT en una cookie httpOnly que solo usa el servidor de Next.
-- **Registro con consentimiento:** exige consentimiento explícito. Responde lo mismo si el cliente ya existía, así que no revela quién está registrado.
+- **Sesión del administrador:** es un JWT en una cookie httpOnly que solo usa el servidor de Next. El login responde igual, y tarda lo mismo, si el correo no existe o si la contraseña es incorrecta.
+- **Registro con consentimiento:** exige consentimiento explícito. Responde lo mismo si el cliente ya existía, así que no revela quién está registrado. Registrarse de nuevo con un contacto existente solo renueva el consentimiento: no cambia el nombre ni los contactos, para que nadie pueda reemplazar los datos de otra persona conociendo su correo o teléfono.
 - **Baja segura:** es un POST con confirmación y un token aleatorio. Así, los antivirus de correo que abren enlaces no dan de baja a nadie.
 - **Correos:** cada correo lleva enlace de baja y el encabezado `List-Unsubscribe`. El destinatario, el asunto y el nombre se validan contra saltos de línea para evitar inyección de encabezados.
 - **Logs:** no incluyen datos personales.
@@ -131,13 +132,14 @@ scripts/        crear-env.mjs (genera el .env)
 ## Tests y CI
 
 ```bash
-npm test      # 90 pruebas unitarias y 38 e2e
-npm run lint
+npm test      # API: 109 unitarias y 84 e2e; web: 9
+npm run lint  # oxlint + eslint + revisión de tipos (tests incluidos)
 npm run build
 ```
 
 - Las pruebas e2e usan una base SQLite temporal para cada corrida y un transporte de correo falso.
-- El CI (`.github/workflows/ci.yml`) corre lint, tests y build, y luego construye las imágenes de Docker.
+- El CI (`.github/workflows/ci.yml`) corre lint, tests y build; luego construye las imágenes de Docker, levanta el stack con `docker compose up --wait` y comprueba que la API y la web respondan (eso prueba que las migraciones se aplican al arrancar).
+- Hay tests de autorización para todas las rutas del administrador: sin token, token mal formado, firmado con otra clave y vencido.
 
 ## Desarrollo sin Docker
 
@@ -156,7 +158,10 @@ Para ver los correos sin Docker, levanta solo Mailpit con `docker compose up -d 
 
 Fuera del MVP, y cosas que faltan:
 
-- Sin límite de peticiones (rate limiting) en el registro público.
+- Sin límite de peticiones (rate limiting) en el registro público ni en el login.
+- Sin doble confirmación del correo (*double opt-in*): quien conoce el correo o el teléfono de alguien que se dio de baja puede volver a suscribirlo.
+- Cerrar sesión borra la cookie, pero el token no se revoca: sigue siendo válido hasta que vence (8 horas).
+- Las fechas de las ventas se interpretan en la hora de Chile (`America/Santiago`, fija en `apps/api/src/comun/hora.ts`).
 - Solo hay adaptador de Excel (`.xlsx`). CSV y otras fuentes quedan para después.
 - Un solo administrador, sin roles.
 - Correos en texto plano, sin plantillas HTML.
