@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { OfertaResumen, Segmento, VistaPreviaResponse } from '@cafeteria/shared';
 import type { Oferta } from '../generated/prisma/client.js';
 import type { Env } from '../config/env.js';
+import { horaDePared } from '../comun/hora.js';
 import { CorreoService } from '../correo/correo.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CifradoService } from '../seguridad/cifrado.service.js';
@@ -10,6 +11,8 @@ import { CrearOfertaDto } from './oferta.dto.js';
 import { filtrarSegmento } from './filtrar-segmento.js';
 
 const DIA_MS = 86_400_000;
+
+// "ahora" siempre es hora de pared del local, igual que las fechas de las ventas (ver comun/hora.ts).
 
 @Injectable()
 export class OfertasService {
@@ -22,11 +25,11 @@ export class OfertasService {
     private readonly config: ConfigService<Env, true>,
   ) {}
 
-  async vistaPrevia(segmento: Segmento, ahora = new Date()): Promise<VistaPreviaResponse> {
+  async vistaPrevia(segmento: Segmento, ahora = horaDePared(new Date())): Promise<VistaPreviaResponse> {
     return { destinatarios: (await this.destinatarios(segmento, ahora)).length };
   }
 
-  async crear(dto: CrearOfertaDto, ahora = new Date()): Promise<OfertaResumen> {
+  async crear(dto: CrearOfertaDto, ahora = horaDePared(new Date())): Promise<OfertaResumen> {
     const segmento = limpiarSegmento(dto.segmento);
     const destinatarios = await this.destinatarios(segmento, ahora);
     const urlWeb = this.config.get('PUBLIC_WEB_URL', { infer: true });
