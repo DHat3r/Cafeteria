@@ -1,6 +1,7 @@
 # Levanta la API, el frontend y un servidor de correo falso para desarrollo.
-# Uso: docker compose up -d --build
-# Los puertos se pueden cambiar con variables de entorno (ver .env.example).
+# Primera vez:  node scripts/crear-env.mjs   (crea .env con secretos aleatorios)
+# Después:      docker compose up -d --build
+# Los puertos se pueden cambiar en .env (ver .env.example).
 
 services:
   api:
@@ -9,6 +10,24 @@ services:
       dockerfile: apps/api/Dockerfile
     ports:
       - "${API_PORT:-3001}:3001"
+    environment:
+      # La base SQLite es un archivo; vive en el volumen "datos" para sobrevivir a los reinicios.
+      DATABASE_URL: file:/data/cafeteria.db
+      # Sin estos secretos compose se niega a arrancar, en vez de usar valores por defecto inseguros.
+      JWT_SECRET: "${JWT_SECRET:?Falta JWT_SECRET. Corre node scripts/crear-env.mjs}"
+      CLIENTES_ENC_KEY: "${CLIENTES_ENC_KEY:?Falta CLIENTES_ENC_KEY. Corre node scripts/crear-env.mjs}"
+      CLIENTES_HMAC_KEY: "${CLIENTES_HMAC_KEY:?Falta CLIENTES_HMAC_KEY. Corre node scripts/crear-env.mjs}"
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@cafeteria.local}
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:?Falta ADMIN_PASSWORD. Corre node scripts/crear-env.mjs}"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: ${MAIL_FROM:-Cafetería <ofertas@cafeteria.local>}
+      # Dirección pública del frontend: se usa en los enlaces de baja de los correos.
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:${WEB_PORT:-3000}}
+    volumes:
+      - datos:/data
+    depends_on:
+      - mailpit
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
       interval: 10s
@@ -24,6 +43,10 @@ services:
     environment:
       # Dentro de la red de compose la API se llama "api", no localhost
       API_URL: http://api:3001
+      # Dirección que se codifica en el QR de registro.
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:${WEB_PORT:-3000}}
+      # En producción con HTTPS, poner COOKIE_SECURE=true en .env.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     depends_on:
       api:
         condition: service_healthy
@@ -35,3 +58,6 @@ services:
     ports:
       - "${MAILPIT_SMTP_PORT:-1025}:1025"
       - "${MAILPIT_UI_PORT:-8025}:8025"
+
+volumes:
+  datos:
