@@ -60,3 +60,22 @@ jobs:
       # Construye las imágenes definidas en docker-compose.yml
       - name: Construir imágenes Docker
         run: docker compose build
+
+      # Levanta el stack completo y espera a que los healthchecks pasen. Así se prueba lo que el build
+      # no prueba: que la API aplica las migraciones al arrancar y que la web llega a la API.
+      - name: Levantar el stack
+        run: docker compose up -d --wait
+
+      - name: Comprobar que responde
+        run: |
+          curl -fsS http://localhost:3001/api/health
+          curl -fsS -o /dev/null http://localhost:3000/login
+
+      # Si algo falló, los logs de los contenedores explican por qué.
+      - name: Mostrar los logs si falló
+        if: failure()
+        run: docker compose logs
+
+      - name: Apagar el stack
+        if: always()
+        run: docker compose down -v
