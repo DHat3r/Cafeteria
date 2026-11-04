@@ -33,8 +33,16 @@ COPY --from=build /repo/packages/shared/package.json packages/shared/package.jso
 COPY --from=build /repo/packages/shared/dist packages/shared/dist
 COPY --from=build /repo/apps/api/package.json apps/api/package.json
 COPY --from=build /repo/apps/api/dist apps/api/dist
+# Migraciones y configuración de Prisma: se aplican al arrancar, así la base queda lista sola
+COPY --from=build /repo/apps/api/prisma apps/api/prisma
+COPY --from=build /repo/apps/api/prisma.config.ts apps/api/prisma.config.ts
+
+# Carpeta de la base SQLite. Se crea con dueño "node" para que un volumen nuevo herede el permiso
+RUN mkdir /data && chown node:node /data
 
 # No ejecutamos como root: el usuario "node" viene incluido en la imagen
 USER node
+WORKDIR /repo/apps/api
 EXPOSE 3001
-CMD ["node", "apps/api/dist/main.js"]
+# migrate deploy aplica solo las migraciones pendientes (no borra datos). --no-install evita descargar nada.
+CMD ["sh", "-c", "npx --no-install prisma migrate deploy && node dist/main.js"]
