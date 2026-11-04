@@ -1,7 +1,10 @@
 // Normalización de datos de contacto. Se aplica antes de cifrar y de calcular
 // el HMAC: así "Ana@Mail.cl " y "ana@mail.cl" producen el mismo HMAC y se asocian.
 
-const FORMA_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Sin espacios, ni comas, punto y coma, <>, comillas, paréntesis, corchetes o barras invertidas:
+// nodemailer interpreta esos caracteres como varias direcciones o como "Nombre <dirección>".
+const CARACTER_VALIDO = String.raw`[^\s@,;<>"()\[\]\\]`;
+const FORMA_CORREO = new RegExp(`^${CARACTER_VALIDO}+@${CARACTER_VALIDO}+\\.${CARACTER_VALIDO}+$`);
 
 export function normalizarCorreo(valor: string | null | undefined): string | null {
   const correo = (valor ?? '').trim().toLowerCase();
