@@ -1,0 +1,19 @@
+{
+  "name": "@cafeteria/shared",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Tipos compartidos entre la API y el frontend.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2"
+  }
+}

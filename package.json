@@ -10,8 +10,9 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present"
+    "build:shared": "npm run build -w @cafeteria/shared",
+    "build": "npm run build:shared && npm run build -w @cafeteria/api -w @cafeteria/web",
+    "test": "npm run build:shared && npm run test -w @cafeteria/api && npm run test:e2e -w @cafeteria/api",
+    "lint": "npm run build:shared && npm run lint -w @cafeteria/api -w @cafeteria/web"
   }
 }
