@@ -53,6 +53,10 @@ jobs:
       # Descarga el código para tener los Dockerfiles y docker-compose.yml
       - uses: actions/checkout@v4
 
+      # docker-compose.yml exige los secretos: se generan aleatorios, como lo haría cualquiera que clone el repo
+      - name: Crear .env
+        run: node scripts/crear-env.mjs
+
       # Construye las imágenes definidas en docker-compose.yml
       - name: Construir imágenes Docker
         run: docker compose build
