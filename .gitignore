@@ -1,0 +1,28 @@
+# Dependencias
+node_modules/
+
+# Compilados (en LinkUDP se subió dist/ por error)
+dist/
+.next/
+out/
+*.tsbuildinfo
+coverage/
+
+# Secretos: solo se versiona .env.example
+.env
+.env.*
+!.env.example
+
+# Base de datos SQLite: contiene datos de clientes
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Editores y sistema
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.log

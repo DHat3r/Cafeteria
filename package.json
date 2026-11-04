@@ -1,0 +1,17 @@
+{
+  "name": "cafeteria",
+  "private": true,
+  "description": "Sistema de ventas de una cafetería: API NestJS y frontend Next.js en un solo repo.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  }
+}
