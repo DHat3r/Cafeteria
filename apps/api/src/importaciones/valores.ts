@@ -31,20 +31,29 @@ export function parsearFecha(valor: unknown): Date | null {
   return valida ? fecha : null;
 }
 
+// La base guarda enteros de 32 bits: un valor mayor haría fallar el INSERT de todo el archivo.
+// Se rechaza la fila con un tope razonable (100 millones de pesos por venta, 10.000 unidades).
+export const MAX_MONTO = 100_000_000;
+export const MAX_CANTIDAD = 10_000;
+
 // Monto en pesos, entero. Acepta números y textos como "$4.500", "4.500,50" o "4500".
 // En Chile el punto separa miles y la coma, decimales.
 export function parsearMonto(valor: unknown): number | null {
-  if (typeof valor === 'number') return Number.isFinite(valor) && valor >= 0 ? Math.round(valor) : null;
+  if (typeof valor === 'number') return dentroDelTope(valor);
   const texto = aTexto(valor).replace(/[$\s]/g, '');
   if (!/^\d{1,3}(\.\d{3})*(,\d+)?$|^\d+(,\d+)?$/.test(texto)) return null;
-  return Math.round(Number(texto.replace(/\./g, '').replace(',', '.')));
+  return dentroDelTope(Number(texto.replace(/\./g, '').replace(',', '.')));
+}
+
+function dentroDelTope(monto: number): number | null {
+  return Number.isFinite(monto) && monto >= 0 && Math.round(monto) <= MAX_MONTO ? Math.round(monto) : null;
 }
 
 // Cantidad entera positiva. Si la columna no se mapeó o viene vacía, vale 1.
 export function parsearCantidad(valor: unknown): number | null {
   if (valor === null || valor === undefined || aTexto(valor).trim() === '') return 1;
   const numero = Number(aTexto(valor).trim().replace(',', '.'));
-  return Number.isInteger(numero) && numero > 0 ? numero : null;
+  return Number.isInteger(numero) && numero > 0 && numero <= MAX_CANTIDAD ? numero : null;
 }
 
 export function parsearTexto(valor: unknown): string | null {

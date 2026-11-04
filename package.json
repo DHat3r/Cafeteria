@@ -12,7 +12,7 @@
   "scripts": {
     "build:shared": "npm run build -w @cafeteria/shared && npm run prisma:generate -w @cafeteria/api",
     "build": "npm run build:shared && npm run build -w @cafeteria/api -w @cafeteria/web",
-    "test": "npm run build:shared && npm run test -w @cafeteria/api && npm run test:e2e -w @cafeteria/api",
+    "test": "npm run build:shared && npm run test -w @cafeteria/api && npm run test:e2e -w @cafeteria/api && npm run test -w @cafeteria/web",
     "lint": "npm run build:shared && npm run lint -w @cafeteria/api -w @cafeteria/web",
     "env": "node scripts/crear-env.mjs"
   },

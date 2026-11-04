@@ -22,8 +22,9 @@ services:
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
       MAIL_FROM: ${MAIL_FROM:-Cafetería <ofertas@cafeteria.local>}
-      # Dirección pública del frontend: se usa en los enlaces de baja de los correos.
-      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:${WEB_PORT:-3000}}
+      # Dirección pública del frontend: se usa en los enlaces de baja de los correos. Sigue a WEB_PORT;
+      # para un dominio propio, poner APP_URL en .env (ver .env.example).
+      PUBLIC_WEB_URL: ${APP_URL:-http://localhost:${WEB_PORT:-3000}}
     volumes:
       - datos:/data
     depends_on:
@@ -44,12 +45,18 @@ services:
       # Dentro de la red de compose la API se llama "api", no localhost
       API_URL: http://api:3001
       # Dirección que se codifica en el QR de registro.
-      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:${WEB_PORT:-3000}}
+      PUBLIC_WEB_URL: ${APP_URL:-http://localhost:${WEB_PORT:-3000}}
       # En producción con HTTPS, poner COOKIE_SECURE=true en .env.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      # 127.0.0.1 y no localhost: en Alpine localhost resuelve primero a IPv6 y Next solo escucha en IPv4.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/login"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   mailpit:
     # Servidor SMTP falso: los correos no salen de la maquina.

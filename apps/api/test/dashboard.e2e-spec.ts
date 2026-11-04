@@ -76,8 +76,8 @@ describe('GET /api/dashboard (e2e)', () => {
     ['fecha imposible', '?desde=2026-02-31&hasta=2026-03-05'],
     ['rango invertido', '?desde=2026-11-10&hasta=2026-11-01'],
     ['rango demasiado largo', '?desde=2020-01-01&hasta=2026-11-01'],
-  ])('rechaza %s con 400', (_nombre, consulta) => {
-    return pedir(consulta).expect(400);
+  ])('rechaza %s con 400', async (_nombre, consulta) => {
+    await pedir(consulta).expect(400);
   });
 
   it('exige token de admin', () => {

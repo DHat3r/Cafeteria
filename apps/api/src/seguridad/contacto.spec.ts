@@ -5,7 +5,21 @@ describe('normalizarCorreo', () => {
     expect(normalizarCorreo('  Ana.Perez@Mail.CL ')).toBe('ana.perez@mail.cl');
   });
 
-  it.each(['', 'sin-arroba', 'a@b', 'con espacio@mail.cl', null, undefined])(
+  it.each([
+    '',
+    'sin-arroba',
+    'a@b',
+    'con espacio@mail.cl',
+    // Caracteres que nodemailer interpretaría como varias direcciones o como un nombre con <>:
+    'ana@mail.cl,otra@mail.cl',
+    'ana@mail.cl;otra@mail.cl',
+    '<ana@mail.cl>',
+    '"ana"@mail.cl',
+    'Ana <ana@mail.cl>',
+    'ana@mail.cl,x.cl',
+    null,
+    undefined,
+  ])(
     'rechaza %s',
     (valor) => {
       expect(normalizarCorreo(valor)).toBeNull();

@@ -127,6 +127,23 @@ describe('Importaciones (e2e)', () => {
     return importar(Buffer.from('no soy un excel'), MAPEO, 'ventas.xlsx').expect(400);
   });
 
+  it('rechaza un archivo de más de 5 MB con 413', async () => {
+    const demasiadoGrande = Buffer.alloc(5 * 1024 * 1024 + 1024, 'a');
+
+    await importar(demasiadoGrande).expect(413);
+  });
+
+  it('una venta con un monto absurdo es un error de esa fila y el resto se importa', async () => {
+    const res = await importar(
+      await excel([
+        ['B-1', '03-11-2026', 'Latte', 3_000_000_000, ''],
+        ['B-2', '03-11-2026', 'Latte', 3500, ''],
+      ]),
+    ).expect(201);
+
+    expect(res.body).toMatchObject({ importadas: 1, conError: 1, errores: [{ fila: 2, motivo: 'monto inválido' }] });
+  });
+
   it('exige token de admin', () => {
     return request(app.getHttpServer()).get('/api/importaciones').expect(401);
   });

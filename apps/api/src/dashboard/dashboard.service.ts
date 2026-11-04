@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Dashboard } from '@cafeteria/shared';
+import { horaDePared } from '../comun/hora.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { calcularDashboard } from './calcular-dashboard.js';
 
@@ -21,8 +22,9 @@ function aFechaUtc(texto: string): Date {
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Sin parámetros, muestra los últimos 30 días contando hoy.
-  async obtener(desde?: string, hasta?: string, ahora = new Date()): Promise<Dashboard> {
+  // Sin parámetros, muestra los últimos 30 días contando hoy. "ahora" es la hora de pared del local
+  // (las ventas se guardan así), no el instante UTC: de noche en Chile el día UTC ya es el siguiente.
+  async obtener(desde?: string, hasta?: string, ahora = horaDePared(new Date())): Promise<Dashboard> {
     const finTexto = hasta ?? ahora.toISOString().slice(0, 10);
     const fin = aFechaUtc(finTexto);
     const inicioTexto = desde ?? new Date(fin.getTime() - (DIAS_POR_DEFECTO - 1) * DIA_MS).toISOString().slice(0, 10);

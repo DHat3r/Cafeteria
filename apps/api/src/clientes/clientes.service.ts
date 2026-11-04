@@ -12,6 +12,11 @@ const MENSAJE_BAJA = 'Listo, ya no recibirás más ofertas.';
 
 type Hmacs = { correoHmac: string | null; telefonoHmac: string | null };
 
+// Prisma lanza P2002 cuando un INSERT choca con un índice único (correoHmac o telefonoHmac).
+function esViolacionUnica(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002';
+}
+
 @Injectable()
 export class ClientesService {
   constructor(
@@ -32,38 +37,38 @@ export class ClientesService {
       correoHmac: correo ? this.cifrado.hmac(correo) : null,
       telefonoHmac: telefono ? this.cifrado.hmac(telefono) : null,
     };
-    const nombre = dto.nombre.trim();
-    const existente = await this.prisma.cliente.findFirst({ where: { OR: this.condicionesContacto(hmacs) } });
 
-    const cliente = existente
-      ? await this.prisma.cliente.update({
-          where: { id: existente.id },
-          // Vuelve a aceptar: se renueva el consentimiento y se quita la baja.
-          data: {
-            nombre,
-            consentimientoEn: new Date(),
-            bajaEn: null,
-            ...(await this.correoSiLibre(correo, hmacs.correoHmac, existente.id)),
-            ...(await this.telefonoSiLibre(telefono, hmacs.telefonoHmac, existente.id)),
-          },
-        })
-      : await this.prisma.cliente.create({
-          data: {
-            nombre,
-            correoCifrado: correo ? this.cifrado.cifrar(correo) : null,
-            correoHmac: hmacs.correoHmac,
-            telefonoCifrado: telefono ? this.cifrado.cifrar(telefono) : null,
-            telefonoHmac: hmacs.telefonoHmac,
-            consentimientoEn: new Date(),
-            tokenBaja: randomBytes(24).toString('base64url'),
-          },
-        });
+    const existente = await this.buscar(hmacs);
+    if (existente) {
+      // Quien vuelve a registrarse solo renueva su consentimiento y se quita la baja. NO se cambian
+      // el nombre ni los contactos: cualquiera que conozca el correo o el teléfono de otra persona
+      // podría, si no, reemplazarle los datos y recibir sus ofertas.
+      await this.prisma.cliente.update({
+        where: { id: existente.id },
+        data: { consentimientoEn: new Date(), bajaEn: null },
+      });
+      await this.asociarVentasPrevias(existente.id, existente);
+      return { mensaje: MENSAJE_REGISTRO };
+    }
 
-    // Ventas importadas antes de que el cliente se registrara.
-    await this.prisma.venta.updateMany({
-      where: { clienteId: null, OR: this.condicionesContacto(hmacs) },
-      data: { clienteId: cliente.id },
-    });
+    try {
+      const nuevo = await this.prisma.cliente.create({
+        data: {
+          nombre: dto.nombre,
+          correoCifrado: correo ? this.cifrado.cifrar(correo) : null,
+          correoHmac: hmacs.correoHmac,
+          telefonoCifrado: telefono ? this.cifrado.cifrar(telefono) : null,
+          telefonoHmac: hmacs.telefonoHmac,
+          consentimientoEn: new Date(),
+          tokenBaja: randomBytes(24).toString('base64url'),
+        },
+      });
+      await this.asociarVentasPrevias(nuevo.id, nuevo);
+    } catch (error) {
+      // Dos registros simultáneos con el mismo contacto: el segundo choca con el índice único.
+      // El cliente ya quedó creado por el primero, así que se responde igual que siempre.
+      if (!esViolacionUnica(error)) throw error;
+    }
     return { mensaje: MENSAJE_REGISTRO };
   }
 
@@ -97,22 +102,16 @@ export class ClientesService {
     });
   }
 
-  private condicionesContacto({ correoHmac, telefonoHmac }: Hmacs) {
-    return [...(correoHmac ? [{ correoHmac }] : []), ...(telefonoHmac ? [{ telefonoHmac }] : [])];
+  private buscar({ correoHmac, telefonoHmac }: Hmacs) {
+    const condiciones = [...(correoHmac ? [{ correoHmac }] : []), ...(telefonoHmac ? [{ telefonoHmac }] : [])];
+    return this.prisma.cliente.findFirst({ where: { OR: condiciones } });
   }
 
-  // Al actualizar un cliente, un contacto nuevo solo se agrega si no es de otro cliente.
-  private async correoSiLibre(correo: string | null, correoHmac: string | null, clienteId: number) {
-    if (!correo || !correoHmac) return {};
-    const dueno = await this.prisma.cliente.findUnique({ where: { correoHmac } });
-    if (dueno && dueno.id !== clienteId) return {};
-    return { correoCifrado: this.cifrado.cifrar(correo), correoHmac };
-  }
-
-  private async telefonoSiLibre(telefono: string | null, telefonoHmac: string | null, clienteId: number) {
-    if (!telefono || !telefonoHmac) return {};
-    const dueno = await this.prisma.cliente.findUnique({ where: { telefonoHmac } });
-    if (dueno && dueno.id !== clienteId) return {};
-    return { telefonoCifrado: this.cifrado.cifrar(telefono), telefonoHmac };
+  // Ventas importadas antes de que el cliente se registrara. Se usan los contactos que el cliente
+  // TIENE guardados, no los que vinieron en esta petición (que pueden no ser suyos).
+  private async asociarVentasPrevias(clienteId: number, { correoHmac, telefonoHmac }: Hmacs) {
+    const condiciones = [...(correoHmac ? [{ correoHmac }] : []), ...(telefonoHmac ? [{ telefonoHmac }] : [])];
+    if (condiciones.length === 0) return;
+    await this.prisma.venta.updateMany({ where: { clienteId: null, OR: condiciones }, data: { clienteId } });
   }
 }

@@ -51,12 +51,67 @@ describe('Clientes (e2e)', () => {
 
   it('registrarse dos veces no duplica al cliente y responde lo mismo', async () => {
     const primera = await registrar({ nombre: 'Ana', correo: 'ana@mail.cl', consentimiento: true }).expect(200);
-    const segunda = await registrar({ nombre: 'Ana P.', correo: 'ANA@mail.cl', consentimiento: true }).expect(200);
+    const segunda = await registrar({ nombre: 'Otro nombre', correo: 'ANA@mail.cl', consentimiento: true }).expect(200);
 
     expect(segunda.body).toEqual(primera.body);
     const clientes = await listar();
     expect(clientes).toHaveLength(1);
-    expect(clientes[0].nombre).toBe('Ana P.');
+    // Quien conoce un contacto ajeno no puede renombrar a esa persona (el nombre sale en sus correos).
+    expect(clientes[0].nombre).toBe('Ana');
+  });
+
+  it('registrar un contacto ajeno no reemplaza los datos del cliente existente', async () => {
+    await registrar({ nombre: 'Ana', correo: 'ana@mail.cl', telefono: '912345678', consentimiento: true }).expect(200);
+
+    // Un tercero conoce el teléfono de Ana e intenta cambiar su correo y su nombre.
+    await registrar({ nombre: 'Intruso', correo: 'intruso@mail.cl', telefono: '912345678', consentimiento: true }).expect(200);
+
+    const clientes = await listar();
+    expect(clientes).toHaveLength(1);
+    expect(clientes[0]).toMatchObject({ nombre: 'Ana', correo: 'ana@mail.cl', telefono: '+56912345678' });
+  });
+
+  it('no asocia a un cliente las ventas del correo ajeno que alguien intentó agregarle', async () => {
+    const cifrado = app.get(CifradoService);
+    await registrar({ nombre: 'Ana', telefono: '912345678', consentimiento: true }).expect(200);
+    const importacion = await prisma.importacion.create({
+      data: { archivo: 'x.xlsx', filasLeidas: 1, importadas: 1, duplicadas: 0, conError: 0, asociadas: 0 },
+    });
+    await prisma.venta.create({
+      data: {
+        idExterno: 'B-9',
+        fecha: new Date('2026-11-01T10:00:00Z'),
+        producto: 'Latte',
+        cantidad: 1,
+        monto: 3500,
+        correoHmac: cifrado.hmac('intruso@mail.cl'),
+        importacionId: importacion.id,
+      },
+    });
+
+    await registrar({ nombre: 'Intruso', correo: 'intruso@mail.cl', telefono: '912345678', consentimiento: true }).expect(200);
+
+    expect((await listar())[0].compras).toBe(0);
+  });
+
+  it('dos registros simultáneos con el mismo contacto responden igual y crean un solo cliente', async () => {
+    const cuerpo = { nombre: 'Ana', correo: 'ana@mail.cl', consentimiento: true };
+
+    const [a, b] = await Promise.all([registrar(cuerpo), registrar(cuerpo)]);
+
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(b.body).toEqual(a.body);
+    expect(await listar()).toHaveLength(1);
+  });
+
+  it('recorta el nombre y rechaza nombres vacíos o con saltos de línea', async () => {
+    await registrar({ nombre: '   ', correo: 'a@mail.cl', consentimiento: true }).expect(400);
+    await registrar({ nombre: 'Ana\nPérez', correo: 'b@mail.cl', consentimiento: true }).expect(400);
+    await registrar({ nombre: '  Carla  ', correo: 'c@mail.cl', consentimiento: true }).expect(200);
+
+    const clientes = await listar();
+    expect(clientes).toHaveLength(1);
+    expect(clientes[0].nombre).toBe('Carla');
   });
 
   it('asocia las ventas importadas antes del registro', async () => {
