@@ -36,6 +36,12 @@ describe('parsearMonto', () => {
   it.each(['', 'gratis', '4,500.50', '-100', -100, null])('rechaza %s', (valor) => {
     expect(parsearMonto(valor)).toBeNull();
   });
+
+  it('rechaza montos absurdos (la base guarda enteros de 32 bits) pero acepta el máximo', () => {
+    expect(parsearMonto(100_000_000)).toBe(100_000_000);
+    expect(parsearMonto(100_000_001)).toBeNull();
+    expect(parsearMonto('$3.000.000.000')).toBeNull();
+  });
 });
 
 describe('parsearCantidad', () => {
@@ -51,6 +57,11 @@ describe('parsearCantidad', () => {
 
   it.each([0, -1, 1.5, 'dos'])('rechaza %s', (valor) => {
     expect(parsearCantidad(valor)).toBeNull();
+  });
+
+  it('rechaza cantidades absurdas pero acepta el máximo', () => {
+    expect(parsearCantidad(10_000)).toBe(10_000);
+    expect(parsearCantidad(10_001)).toBeNull();
   });
 });
 

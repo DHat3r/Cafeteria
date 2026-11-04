@@ -153,4 +153,34 @@ describe('ExcelFuente', () => {
     expect(lectura.errores).toHaveLength(2);
     expect(lectura.ventas).toHaveLength(60);
   });
+
+  it('rechaza la fila si el producto o el N° de boleta son demasiado largos', async () => {
+    const filas = [
+      ENCABEZADOS_COMPLETOS,
+      [new Date(Date.UTC(2026, 10, 3)), 'x'.repeat(121), 3500, 1, '', '', 'B-1'],
+      [new Date(Date.UTC(2026, 10, 3)), 'Latte', 3500, 1, '', '', 'B'.repeat(101)],
+      [new Date(Date.UTC(2026, 10, 3)), 'x'.repeat(120), 3500, 1, '', '', 'B'.repeat(100)],
+    ];
+
+    const lectura = await fuente.leer(await crearExcel(filas), MAPEO_COMPLETO);
+
+    expect(lectura.errores).toEqual([
+      { fila: 2, motivo: 'producto demasiado largo' },
+      { fila: 3, motivo: 'N° de boleta demasiado largo' },
+    ]);
+    expect(lectura.ventas).toHaveLength(1);
+  });
+
+  it('una fila con un monto absurdo es un error de esa fila, no de todo el archivo', async () => {
+    const filas = [
+      ENCABEZADOS_COMPLETOS,
+      [new Date(Date.UTC(2026, 10, 3)), 'Latte', 3_000_000_000, 1, '', '', 'B-1'],
+      [new Date(Date.UTC(2026, 10, 3)), 'Latte', 3500, 1, '', '', 'B-2'],
+    ];
+
+    const lectura = await fuente.leer(await crearExcel(filas), MAPEO_COMPLETO);
+
+    expect(lectura.errores).toEqual([{ fila: 2, motivo: 'monto inválido' }]);
+    expect(lectura.ventas).toHaveLength(1);
+  });
 });

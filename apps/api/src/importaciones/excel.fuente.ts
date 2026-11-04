@@ -9,6 +9,9 @@ type Celda = string | number | boolean | Date | null;
 type Fila = Record<string, Celda>;
 
 const FILAS_DE_MUESTRA = 5;
+// Largos máximos: evitan que un texto enorme (o un Excel mal armado) llene la base.
+const MAX_LARGO_PRODUCTO = 120;
+const MAX_LARGO_ID = 100;
 
 // Adaptador para el Excel (.xlsx) que exporta el sistema de ventas de la cafetería.
 // No asume columnas fijas: usa la primera fila como encabezados y el mapeo que
@@ -39,15 +42,8 @@ export class ExcelFuente implements FuenteVentas {
       const correoCrudo = parsearTexto(valor('correo'));
       const telefonoCrudo = parsearTexto(valor('telefono'));
 
-      const motivo = !fecha
-        ? 'fecha inválida'
-        : !producto
-          ? 'falta el producto'
-          : monto === null
-            ? 'monto inválido'
-            : cantidad === null
-              ? 'cantidad inválida'
-              : null;
+      const idExterno = parsearTexto(valor('idExterno'));
+      const motivo = motivoDeError({ fecha, producto, monto, cantidad, idExterno });
       if (motivo || !fecha || !producto || monto === null || cantidad === null) {
         lectura.errores.push({ fila: numero, motivo: motivo ?? 'fila inválida' });
         continue;
@@ -63,7 +59,7 @@ export class ExcelFuente implements FuenteVentas {
           // Un contacto mal escrito no invalida la venta: solo no se podrá asociar.
           correo: normalizarCorreo(correoCrudo),
           telefono: normalizarTelefono(telefonoCrudo),
-          idExterno: parsearTexto(valor('idExterno')),
+          idExterno,
         },
       });
     }
@@ -108,4 +104,21 @@ function textoVisible(valor: Celda | undefined): string {
   if (valor === null || valor === undefined) return '';
   if (valor instanceof Date) return valor.toISOString().slice(0, 16).replace('T', ' ');
   return String(valor).trim();
+}
+
+// Primer problema de una fila, o null si es válida. El orden es el que ve quien corrige el Excel.
+function motivoDeError(f: {
+  fecha: Date | null;
+  producto: string | null;
+  monto: number | null;
+  cantidad: number | null;
+  idExterno: string | null;
+}): string | null {
+  if (!f.fecha) return 'fecha inválida';
+  if (!f.producto) return 'falta el producto';
+  if (f.producto.length > MAX_LARGO_PRODUCTO) return 'producto demasiado largo';
+  if (f.monto === null) return 'monto inválido';
+  if (f.cantidad === null) return 'cantidad inválida';
+  if (f.idExterno && f.idExterno.length > MAX_LARGO_ID) return 'N° de boleta demasiado largo';
+  return null;
 }
