@@ -72,7 +72,13 @@ function GraficoVentasPorDia({ dias }: { dias: VentasDelDia[] }) {
                   title={`${formatearFecha(dia.fecha)}: ${pesos(dia.monto)}`}
                 />
               </div>
-              <span className="h-4 text-[10px] text-tinta-suave">{mostrarEtiqueta ? fechaCorta(dia.fecha) : ""}</span>
+              <span
+                className={`h-4 whitespace-nowrap text-[10px] text-tinta-suave ${
+                  indice === 0 ? "self-start" : indice === ultimoIndice ? "self-end" : ""
+                }`}
+              >
+                {mostrarEtiqueta ? fechaCorta(dia.fecha) : ""}
+              </span>
             </div>
           );
         })}
@@ -85,8 +91,12 @@ function GraficoVentasPorDia({ dias }: { dias: VentasDelDia[] }) {
             <thead>
               <tr>
                 <th scope="col">Fecha</th>
-                <th scope="col">Ventas</th>
-                <th scope="col">Monto</th>
+                <th scope="col" className="num">
+                  Ventas
+                </th>
+                <th scope="col" className="num">
+                  Monto
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -164,8 +174,12 @@ export default async function PaginaResumen({ searchParams }: Props) {
                     <thead>
                       <tr>
                         <th scope="col">Producto</th>
-                        <th scope="col">Unidades</th>
-                        <th scope="col">Monto</th>
+                        <th scope="col" className="num">
+                          Unidades
+                        </th>
+                        <th scope="col" className="num">
+                          Monto
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -185,8 +199,12 @@ export default async function PaginaResumen({ searchParams }: Props) {
                     <thead>
                       <tr>
                         <th scope="col">Nombre</th>
-                        <th scope="col">Compras</th>
-                        <th scope="col">Monto</th>
+                        <th scope="col" className="num">
+                          Compras
+                        </th>
+                        <th scope="col" className="num">
+                          Monto
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
