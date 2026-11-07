@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Boton, Campo, Mensaje } from "@/components/ui";
+import { Boton, Campo, GranoCafe, Mensaje } from "@/components/ui";
 import { registrarCliente, type EstadoRegistro } from "./acciones";
 
 export function FormularioRegistro() {
@@ -9,7 +9,14 @@ export function FormularioRegistro() {
 
   // Tras un registro exitoso no se vuelve a mostrar el formulario.
   if (estado?.ok) {
-    return <Mensaje ok={true}>{estado.mensaje}</Mensaje>;
+    return (
+      <div className="flex flex-col items-center gap-4 py-4 text-center">
+        <span className="sello-entra grid size-20 place-items-center rounded-full border-4 border-cereza text-cereza">
+          <GranoCafe className="size-9" />
+        </span>
+        <Mensaje ok={true}>{estado.mensaje}</Mensaje>
+      </div>
+    );
   }
 
   return (
@@ -22,13 +29,7 @@ export function FormularioRegistro() {
         autoComplete="name"
         defaultValue={estado?.valores?.nombre}
       />
-      <Campo
-        etiqueta="Correo"
-        name="correo"
-        type="email"
-        autoComplete="email"
-        defaultValue={estado?.valores?.correo}
-      />
+      <Campo etiqueta="Correo" name="correo" type="email" autoComplete="email" defaultValue={estado?.valores?.correo} />
       <Campo
         etiqueta="Teléfono"
         name="telefono"
@@ -37,9 +38,9 @@ export function FormularioRegistro() {
         defaultValue={estado?.valores?.telefono}
         ayuda="Móvil chileno, por ejemplo 9 1234 5678"
       />
-      <p className="text-xs text-zinc-500">Indica al menos un correo o un teléfono.</p>
+      <p className="text-xs text-tinta-suave">Indica al menos un correo o un teléfono.</p>
       <label className="flex items-start gap-2 text-sm">
-        <input type="checkbox" name="consentimiento" required className="mt-1" />
+        <input type="checkbox" name="consentimiento" required className="mt-1 accent-cereza" />
         <span>
           Acepto recibir ofertas por correo y que mis datos se usen solo para eso. Puedo darme de baja cuando quiera.
         </span>
