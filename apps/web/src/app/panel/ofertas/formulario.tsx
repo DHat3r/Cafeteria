@@ -4,12 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import type { Segmento } from "@cafeteria/shared";
-import { Boton, Campo, Mensaje } from "@/components/ui";
+import { Boton, Campo, Mensaje, estiloCampo } from "@/components/ui";
 import type { EstadoAccion } from "@/components/ui";
 import { contarDestinatarios, enviarOferta } from "./acciones";
-
-const estiloArea =
-  "rounded-lg border border-zinc-300 bg-white px-3 py-2 text-base text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
 
 export function Formulario() {
   const router = useRouter();
@@ -101,13 +98,13 @@ export function Formulario() {
             value={texto}
             onChange={(evento) => setTexto(evento.target.value)}
             disabled={pendiente}
-            className={estiloArea}
+            className={estiloCampo}
           />
         </label>
       </div>
 
-      <fieldset className="flex flex-col gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-        <legend className="px-1 font-medium">¿A quién se le envía?</legend>
+      <fieldset className="flex flex-col gap-4 rounded-2xl border border-linea bg-porcelana/50 p-4 sm:grid sm:grid-cols-3 sm:items-start">
+        <legend className="px-1 font-semibold">¿A quién se le envía?</legend>
         <Campo
           etiqueta="Producto"
           ayuda="Déjalo vacío para contar cualquier compra"
@@ -141,7 +138,7 @@ export function Formulario() {
       {aviso && <Mensaje ok={aviso.ok}>{aviso.mensaje}</Mensaje>}
 
       <div className="flex flex-wrap gap-3">
-        <Boton type="button" onClick={verDestinatarios} disabled={pendiente} className="bg-zinc-700 hover:bg-zinc-800">
+        <Boton type="button" onClick={verDestinatarios} disabled={pendiente} variante="secundario">
           Ver cuántos clientes lo recibirían
         </Boton>
         <Boton type="submit" disabled={pendiente}>
@@ -149,7 +146,7 @@ export function Formulario() {
         </Boton>
       </div>
 
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-tinta-suave">
         Cada correo incluye un enlace para darse de baja. Solo reciben ofertas quienes aceptaron al registrarse.
       </p>
     </form>

@@ -18,7 +18,8 @@ export async function ApiStatus() {
   const online = health?.status === "ok";
 
   return (
-    <p className={online ? "text-green-700" : "text-red-700"}>
+    <p className={`flex items-center gap-2 text-sm ${online ? "text-hoja" : "text-alerta"}`}>
+      <span aria-hidden="true" className="size-2 rounded-full bg-current" />
       API: {online ? "en línea" : "sin conexión"}
     </p>
   );

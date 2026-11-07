@@ -22,6 +22,8 @@ Sistema de marketing para una cafetería que ya tiene su sistema de ventas: los 
 
 ![Formulario de registro de un cliente desde un celular, ya enviado](docs/capturas/registro-movil.jpg)
 
+> Capturas del diseño anterior en [docs/capturas/v1](docs/capturas/v1).
+
 Todos los datos de las capturas son falsos (dominio `ejemplo.cl`).
 
 ## Stack
