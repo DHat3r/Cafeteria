@@ -4,15 +4,12 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import type { EncabezadosExcel, ResumenImportacion } from "@cafeteria/shared";
-import { Boton, Mensaje } from "@/components/ui";
+import { Boton, Mensaje, Tabla, estiloCampo } from "@/components/ui";
 import { importarVentas, leerEncabezados } from "./acciones";
 import { CAMPOS, construirMapeo, seleccionInicial } from "./columnas";
 import type { Campo, Seleccion } from "./columnas";
 
 type Paso = "archivo" | "columnas" | "resultado";
-
-const estiloCampo =
-  "rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
 
 export function Importador() {
   const router = useRouter();
@@ -99,8 +96,8 @@ export function Importador() {
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-5">
           {cifras.map(({ etiqueta, valor }) => (
             <div key={etiqueta}>
-              <dt className="text-sm text-zinc-500">{etiqueta}</dt>
-              <dd className="text-2xl font-semibold">{valor}</dd>
+              <dt className="text-sm text-tinta-suave">{etiqueta}</dt>
+              <dd className="text-3xl font-bold tracking-tight">{valor}</dd>
             </div>
           ))}
         </dl>
@@ -108,25 +105,23 @@ export function Importador() {
         {resumen.errores && resumen.errores.length > 0 && (
           <div className="flex flex-col gap-2">
             <h3 className="font-medium">Filas con error</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                    <th className="px-3 py-2 font-medium">Fila</th>
-                    <th className="px-3 py-2 font-medium">Motivo</th>
+            <Tabla>
+              <thead>
+                <tr>
+                  <th scope="col">Fila</th>
+                  <th scope="col">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumen.errores.map((error) => (
+                  <tr key={error.fila}>
+                    <td>{error.fila}</td>
+                    <td className="ajustar">{error.motivo}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {resumen.errores.map((error) => (
-                    <tr key={error.fila} className="border-b border-zinc-100 dark:border-zinc-800">
-                      <td className="px-3 py-2">{error.fila}</td>
-                      <td className="px-3 py-2">{error.motivo}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="text-xs text-zinc-500">Mostramos hasta 50 errores.</p>
+                ))}
+              </tbody>
+            </Tabla>
+            <p className="text-xs text-tinta-suave">Mostramos hasta 50 errores.</p>
           </div>
         )}
 
@@ -144,30 +139,26 @@ export function Importador() {
       <form onSubmit={importar} className="flex flex-col gap-6">
         <div>
           <h3 className="mb-2 font-medium">Primeras filas del archivo</h3>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                  {encabezados.encabezados.map((encabezado, indice) => (
-                    <th key={indice} className="px-3 py-2 font-medium">
-                      {encabezado}
-                    </th>
+          <Tabla>
+            <thead>
+              <tr>
+                {encabezados.encabezados.map((encabezado, indice) => (
+                  <th key={indice} scope="col">
+                    {encabezado}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {encabezados.muestra.map((fila, indice) => (
+                <tr key={indice}>
+                  {encabezados.encabezados.map((encabezado, columna) => (
+                    <td key={columna}>{fila[encabezado]}</td>
                   ))}
                 </tr>
-              </thead>
-              <tbody>
-                {encabezados.muestra.map((fila, indice) => (
-                  <tr key={indice} className="border-b border-zinc-100 dark:border-zinc-800">
-                    {encabezados.encabezados.map((encabezado, columna) => (
-                      <td key={columna} className="px-3 py-2">
-                        {fila[encabezado]}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </Tabla>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -190,14 +181,14 @@ export function Importador() {
             </label>
           ))}
         </div>
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-tinta-suave">
           Si el archivo no trae N° de boleta, evitamos duplicados comparando el contenido de cada fila.
         </p>
 
         {mensaje && <Mensaje ok={false}>{mensaje}</Mensaje>}
 
         <div className="flex gap-3">
-          <Boton type="button" onClick={volver} disabled={pendiente} className="bg-zinc-700 hover:bg-zinc-800">
+          <Boton type="button" onClick={volver} disabled={pendiente} variante="secundario">
             Volver
           </Boton>
           <Boton type="submit" disabled={pendiente}>
@@ -218,7 +209,7 @@ export function Importador() {
           required
           disabled={pendiente}
           onChange={(evento) => setArchivo(evento.target.files?.[0] ?? null)}
-          className={estiloCampo}
+          className={`${estiloCampo} file:mr-3 file:rounded-full file:border-0 file:bg-cereza-tenue file:px-3 file:py-1 file:text-sm file:font-medium file:text-cereza`}
         />
       </label>
       {mensaje && <Mensaje ok={false}>{mensaje}</Mensaje>}

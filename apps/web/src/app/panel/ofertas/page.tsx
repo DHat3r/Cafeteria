@@ -1,5 +1,5 @@
 import type { OfertaResumen, Segmento } from "@cafeteria/shared";
-import { Mensaje, Tarjeta } from "@/components/ui";
+import { Mensaje, Tabla, Tarjeta, Titulo } from "@/components/ui";
 import { ApiError, apiGet } from "@/lib/api";
 import { Formulario } from "./formulario";
 
@@ -22,7 +22,9 @@ export default async function PaginaOfertas() {
 
   return (
     <>
-      <h1 className="text-2xl font-semibold">Ofertas por correo</h1>
+      <Titulo bajada="Escribe la oferta, elige a quién va y revisa cuántos la recibirán antes de enviarla.">
+        Ofertas por correo
+      </Titulo>
 
       <Tarjeta>
         <Formulario />
@@ -30,32 +32,34 @@ export default async function PaginaOfertas() {
 
       <Tarjeta titulo="Ofertas enviadas">
         {errorCarga && <Mensaje ok={false}>{errorCarga}</Mensaje>}
-        {!errorCarga && ofertas.length === 0 && <p className="text-sm text-zinc-500">Aún no has enviado ofertas.</p>}
+        {!errorCarga && ofertas.length === 0 && <p className="text-sm text-tinta-suave">Aún no has enviado ofertas.</p>}
         {!errorCarga && ofertas.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                  <th className="px-3 py-2 font-medium">Asunto</th>
-                  <th className="px-3 py-2 font-medium">Fecha</th>
-                  <th className="px-3 py-2 font-medium">Segmento</th>
-                  <th className="px-3 py-2 font-medium">Enviados</th>
-                  <th className="px-3 py-2 font-medium">Fallidos</th>
+          <Tabla>
+            <thead>
+              <tr>
+                <th scope="col">Asunto</th>
+                <th scope="col">Fecha</th>
+                <th scope="col">Segmento</th>
+                <th scope="col" className="num">
+                  Enviados
+                </th>
+                <th scope="col" className="num">
+                  Fallidos
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {ofertas.map((oferta) => (
+                <tr key={oferta.id}>
+                  <td className="ajustar">{oferta.asunto}</td>
+                  <td>{new Date(oferta.creadoEn).toLocaleString("es-CL")}</td>
+                  <td>{describirSegmento(oferta.segmento)}</td>
+                  <td className="num">{oferta.enviados}</td>
+                  <td className="num">{oferta.fallidos}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {ofertas.map((oferta) => (
-                  <tr key={oferta.id} className="border-b border-zinc-100 dark:border-zinc-800">
-                    <td className="px-3 py-2">{oferta.asunto}</td>
-                    <td className="px-3 py-2">{new Date(oferta.creadoEn).toLocaleString("es-CL")}</td>
-                    <td className="px-3 py-2">{describirSegmento(oferta.segmento)}</td>
-                    <td className="px-3 py-2">{oferta.enviados}</td>
-                    <td className="px-3 py-2">{oferta.fallidos}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </Tabla>
         )}
       </Tarjeta>
     </>
