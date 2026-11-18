@@ -5,3 +5,4 @@ export * from './clientes.js';
 export * from './importaciones.js';
 export * from './dashboard.js';
 export * from './ofertas.js';
+export * from './puntos.js';
