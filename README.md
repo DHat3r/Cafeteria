@@ -1,16 +1,17 @@
-# Cafetería · Marketing con QR y ventas
+# Cafetería Abril 1781 · Programa de fidelización
 
 ![CI](https://github.com/DHat3r/Cafeteria/actions/workflows/ci.yml/badge.svg)
 
-Sistema de marketing para una cafetería que ya tiene su sistema de ventas: los clientes se registran desde un QR, el administrador sube el Excel de ventas del día y envía ofertas por correo a los clientes que compran cierto producto.
+Sistema de fidelización y email marketing para **Cafetería Abril 1781**: los clientes se registran por QR o desde el mostrador, el administrador importa las ventas desde Fudo (o cualquier Excel), y envía ofertas segmentadas por correo.
 
 ## Qué hace
 
-1. **Registro por QR.** El cliente escanea el QR del local y se registra con su nombre, un correo o teléfono, y su consentimiento explícito.
-2. **Importación de ventas.** El administrador sube el Excel de ventas del día (`.xlsx`, máximo 5 MB) y elige qué columna corresponde a cada campo.
-3. **Asociación.** Cada venta que trae correo o teléfono se asocia al cliente registrado, aunque ese cliente se haya registrado después de la venta.
-4. **Dashboard.** Muestra ventas, productos y clientes top en un rango de fechas.
-5. **Ofertas.** El administrador envía una oferta por correo a un segmento, por ejemplo "clientes con 2 o más compras de latte en los últimos 30 días".
+1. **Registro por QR.** El cliente escanea el QR del local y se registra con nombre, correo o teléfono, y consentimiento explícito. Al terminar recibe su **tarjeta digital de socio** con puntos acumulados.
+2. **Portal de socio.** Desde `/socio` el cliente consulta su tarjeta, puntos y compras usando su correo o teléfono.
+3. **Importación desde Fudo.** El Excel exportado de Fudo (formato diario o mensual) se detecta automáticamente — sin mapeo manual. También acepta cualquier otro Excel con columnas personalizables.
+4. **Asociación.** Cada venta con correo o teléfono se vincula al cliente registrado, aunque el registro sea posterior a la venta.
+5. **Dashboard.** Ventas totales, ticket promedio, productos y clientes top en el rango de fechas que elijas.
+6. **Email marketing segmentado.** Envía ofertas al segmento que quieras: p. ej. «clientes con 3+ compras de cappuccino en los últimos 30 días». Cada correo incluye enlace de baja con un clic.
 
 ## Capturas
 
@@ -51,25 +52,29 @@ docker compose up -d --build
 
 Después de levantarlo:
 
-- **Web:** http://localhost:3000 (el panel está en `/panel`, el inicio de sesión en `/login` y el registro de clientes en `/registro`).
-- **API:** http://localhost:3001/api (salud del servicio en `/api/health`).
-- **Bandeja de correos de prueba (Mailpit):** http://localhost:8025.
-- **Administrador:** entra con el correo `ADMIN_EMAIL` (por defecto `admin@cafeteria.local`) y la contraseña `ADMIN_PASSWORD`. Ambos valores están en `.env`.
+| URL | Para qué |
+|-----|----------|
+| http://localhost:3000/login | Panel de administrador |
+| http://localhost:3000/registro | Formulario de registro de clientes (QR) |
+| http://localhost:3000/socio | Portal de socio (consulta de puntos) |
+| http://localhost:3001/api | API REST (health en `/api/health`) |
+| http://localhost:8025 | Mailpit — bandeja de correos de prueba |
 
-Notas:
-
-- Los puertos se cambian en `.env`; el QR y los enlaces de baja siguen al puerto de la web. Con un dominio propio, agrega `APP_URL=https://tu-dominio` (y `COOKIE_SECURE=true` si usas HTTPS); ambas están comentadas en `.env.example`.
-- `ADMIN_EMAIL` y `ADMIN_PASSWORD` solo se usan la primera vez, para crear al administrador; cambiarlos después en `.env` no modifica al administrador ya creado.
-- Si Docker Compose se queja de una variable faltante, es porque no se ejecutó el script del paso 1.
+- **Admin por defecto:** correo `ADMIN_EMAIL` y contraseña `ADMIN_PASSWORD` (ambos en `.env`).
+- Los puertos se cambian en `.env`. Con dominio propio agrega `APP_URL=https://tu-dominio` (y `COOKIE_SECURE=true` para HTTPS).
+- `ADMIN_EMAIL` y `ADMIN_PASSWORD` solo crean al administrador la primera vez; cambiarlos después no modifica al admin ya creado.
 - Las migraciones se aplican solas al arrancar la API. La base SQLite vive en el volumen `datos`.
 
 ## Demo guiada
 
 1. Abre http://localhost:3000/login e inicia sesión como administrador.
-2. En **Clientes** aparece el QR, que apunta a `/registro`. Registra un cliente desde `/registro` con un correo o teléfono que aparezca en el Excel de ejemplo, por ejemplo `ana.perez@ejemplo.cl` o el teléfono `9 1111 1111`.
-3. En **Importar ventas** sube `docs/ejemplo-ventas.xlsx`. Tiene 60 ventas falsas de una semana (del 27-10 al 02-11-2026) y 2 filas con errores a propósito. La pantalla intenta adivinar las columnas, y tú confirmas el mapeo.
-4. En **Resumen** elige ese rango de fechas.
-5. En **Ofertas** envía una oferta y revísala en Mailpit (http://localhost:8025).
+2. En **Clientes** aparece el QR que apunta a `/registro`. Registra un cliente con un correo que aparezca en el Excel de ventas.
+3. En **Importar ventas**:
+   - **Con Fudo:** sube el `.xlsx` exportado desde Fudo → se detecta automáticamente, solo confirma.
+   - **Con cualquier Excel:** sube el archivo y mapea las columnas manualmente.
+4. En **Resumen** elige el rango de fechas para ver el dashboard.
+5. En **Ofertas** crea una oferta segmentada (ej: «Clientes activos últimos 30 días») y revísala en Mailpit (http://localhost:8025).
+6. El cliente puede consultar su tarjeta y puntos en http://localhost:3000/socio.
 
 ## Arquitectura
 
@@ -80,7 +85,7 @@ flowchart LR
     WEB["Web: Next.js 16"] --> API["API: NestJS 12"]
     API --> DB[("SQLite en el volumen datos")]
     API --> SMTP["SMTP (Mailpit en desarrollo)"]
-    XLS["Excel de ventas"] --> ADP["Adaptador de Excel"]
+    XLS["Excel Fudo / genérico"] --> ADP["Adaptador de Excel"]
     ADP --> VN["VentaNormalizada"]
     VN --> ASOC["Asociación por HMAC"]
     ASOC --> DB
@@ -158,15 +163,15 @@ Para ver los correos sin Docker, levanta solo Mailpit con `docker compose up -d 
 
 ## Límites y próximos pasos
 
-Fuera del MVP, y cosas que faltan:
+Lo que está fuera del MVP actual o queda pendiente:
 
-- Sin límite de peticiones (rate limiting) en el registro público ni en el login.
-- Sin doble confirmación del correo (*double opt-in*): quien conoce el correo o el teléfono de alguien que se dio de baja puede volver a suscribirlo.
+- **Email en producción:** en desarrollo los correos los atrapa Mailpit (no salen). Para producción hay que configurar `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` y `SMTP_PASS` en `.env` apuntando a un proveedor real (Brevo, SendGrid, etc.).
+- Sin límite de peticiones (*rate limiting*) en el registro público ni en el login.
+- Sin doble confirmación del correo (*double opt-in*).
 - Cerrar sesión borra la cookie, pero el token no se revoca: sigue siendo válido hasta que vence (8 horas).
-- Las fechas de las ventas se interpretan en la hora de Chile (`America/Santiago`, fija en `apps/api/src/comun/hora.ts`).
-- Solo hay adaptador de Excel (`.xlsx`). CSV y otras fuentes quedan para después.
+- Las fechas de ventas se interpretan en hora de Chile (`America/Santiago`, fijo en `apps/api/src/comun/hora.ts`).
 - Un solo administrador, sin roles.
-- Correos en texto plano, sin plantillas HTML.
-- El envío de ofertas es secuencial y ocurre dentro de la petición, sin cola.
-- Sin despliegue público todavía.
+- Correos en texto plano, sin plantillas HTML con imágenes.
+- El envío de ofertas es secuencial y ocurre dentro de la petición HTTP, sin cola.
+- Sin despliegue público todavía (todo corre en local con Docker).
 - La API no tiene documentación Swagger.

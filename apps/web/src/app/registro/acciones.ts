@@ -1,6 +1,7 @@
 "use server";
 
-import type { MensajeResponse } from "@cafeteria/shared";
+import { redirect } from "next/navigation";
+import type { RegistroClienteResponse } from "@cafeteria/shared";
 import { apiPost, mensajeParaUsuario } from "@/lib/api";
 import type { EstadoAccion } from "@/components/ui";
 
@@ -14,17 +15,25 @@ export async function registrarCliente(_anterior: EstadoRegistro, datos: FormDat
   const nombre = String(datos.get("nombre") ?? "").trim();
   const correo = String(datos.get("correo") ?? "").trim();
   const telefono = String(datos.get("telefono") ?? "").trim();
-  // El checkbox llega como "on" cuando está marcado y no llega si no lo está.
   const consentimiento = datos.get("consentimiento") === "on";
 
+  let tokenDestino: string | null = null;
   try {
-    const respuesta = await apiPost<MensajeResponse>(
+    const respuesta = await apiPost<RegistroClienteResponse>(
       "/clientes/registro",
       { nombre, correo: correo || undefined, telefono: telefono || undefined, consentimiento },
       { publica: true },
     );
-    return { ok: true, mensaje: respuesta.mensaje };
+    if (respuesta.token) {
+      tokenDestino = respuesta.token;
+    }
   } catch (error) {
     return { ok: false, mensaje: mensajeParaUsuario(error), valores: { nombre, correo, telefono } };
   }
+
+  if (tokenDestino) {
+    redirect(`/socio/${tokenDestino}`);
+  }
+
+  return { ok: true, mensaje: "¡Listo! Ya quedaste registrado." };
 }

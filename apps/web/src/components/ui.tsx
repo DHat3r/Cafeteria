@@ -87,13 +87,19 @@ export function TarjetaFidelidad({
   children: ReactNode;
 }) {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-10">
-      <div className="troquel overflow-hidden rounded-3xl bg-superficie shadow-[0_1px_0_var(--linea),0_20px_40px_-24px_rgba(42,28,21,0.35)]">
-        <div className="relative bg-relleno px-6 pb-8 pt-9 text-white">
-          <Sellos />
-          <p className="text-sm font-medium opacity-80">Cafetería</p>
-          <h1 className="mt-1 max-w-[16ch] text-3xl font-bold leading-tight tracking-tight">{titulo}</h1>
-          <p className="mt-3 max-w-[34ch] text-sm opacity-90">{bajada}</p>
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-8">
+      <div className="overflow-hidden rounded-3xl bg-superficie shadow-xl border border-linea">
+        <div className="relative bg-relleno px-6 py-8 text-white text-center flex flex-col items-center">
+          <img
+            src="/logo-abril.png"
+            alt="Abril 1781"
+            className="size-16 rounded-full object-cover shadow-md border-2 border-white/20"
+          />
+          <span className="mt-2 text-xs font-semibold uppercase tracking-widest text-cereza-tenue">
+            Cafetería Abril · 1781
+          </span>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-white">{titulo}</h1>
+          <p className="mt-1 text-sm text-white/80 max-w-[32ch]">{bajada}</p>
         </div>
         <div className="p-6">{children}</div>
       </div>
@@ -119,7 +125,7 @@ function Sellos() {
 
 export function GranoCafe({ className = "" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="24" height="24" className={`shrink-0 ${className}`} fill="currentColor" aria-hidden="true">
       <ellipse cx="12" cy="12" rx="7.5" ry="10" transform="rotate(30 12 12)" />
       <path
         d="M8.2 19.6c3.4-2.6 4.6-5.2 3.8-7.8-.8-2.6-.4-5.2 3.8-7.8"

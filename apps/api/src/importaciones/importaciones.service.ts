@@ -28,15 +28,15 @@ export class ImportacionesService {
   ) {}
 
   async encabezados(archivo: Buffer): Promise<EncabezadosExcel> {
-    const { encabezados, muestra } = await this.leerEncabezados(archivo);
+    const { encabezados, muestra, esFudo } = await this.leerEncabezados(archivo);
     const guardado = await this.prisma.mapeoColumnas.findUnique({ where: { fuente: FUENTE } });
-    return { encabezados, muestra, mapeoGuardado: guardado ? (JSON.parse(guardado.mapeo) as MapeoColumnas) : null };
+    return { encabezados, muestra, mapeoGuardado: guardado ? (JSON.parse(guardado.mapeo) as MapeoColumnas) : null, esFudo };
   }
 
   async importar(nombreArchivo: string, archivo: Buffer, mapeoCrudo: unknown): Promise<ResumenImportacion> {
-    const { encabezados } = await this.leerEncabezados(archivo);
-    const mapeo = validarMapeo(mapeoCrudo, encabezados);
-    const lectura = await this.excel.leer(archivo, mapeo);
+    const { encabezados, esFudo } = await this.leerEncabezados(archivo);
+    const mapeo = esFudo ? null : validarMapeo(mapeoCrudo, encabezados);
+    const lectura = await this.excel.leer(archivo, mapeo ?? undefined);
 
     // 1. Contacto → HMAC (nunca se guarda en texto plano) e idExterno estable.
     const conId = this.asignarIds(lectura.ventas.map(({ venta }) => venta));
@@ -65,24 +65,31 @@ export class ImportacionesService {
           asociadas: ventas.filter((v) => v.clienteId !== null).length,
         },
       });
-      await tx.venta.createMany({
-        data: ventas.map(({ idExterno, venta, correoHmac, telefonoHmac, clienteId }) => ({
-          idExterno,
-          fecha: venta.fecha,
-          producto: venta.producto,
-          cantidad: venta.cantidad,
-          monto: venta.monto,
-          correoHmac,
-          telefonoHmac,
-          clienteId,
-          importacionId: creada.id,
-        })),
-      });
-      await tx.mapeoColumnas.upsert({
-        where: { fuente: FUENTE },
-        create: { fuente: FUENTE, mapeo: JSON.stringify(mapeo) },
-        update: { mapeo: JSON.stringify(mapeo) },
-      });
+
+      for (let i = 0; i < ventas.length; i += LOTE) {
+        await tx.venta.createMany({
+          data: ventas.slice(i, i + LOTE).map(({ idExterno, venta, correoHmac, telefonoHmac, clienteId }) => ({
+            idExterno,
+            fecha: venta.fecha,
+            producto: venta.producto,
+            cantidad: venta.cantidad,
+            monto: venta.monto,
+            correoHmac,
+            telefonoHmac,
+            clienteId,
+            importacionId: creada.id,
+          })),
+        });
+      }
+
+      if (mapeo) {
+        await tx.mapeoColumnas.upsert({
+          where: { fuente: FUENTE },
+          create: { fuente: FUENTE, mapeo: JSON.stringify(mapeo) },
+          update: { mapeo: JSON.stringify(mapeo) },
+        });
+      }
+
       return creada;
     });
 

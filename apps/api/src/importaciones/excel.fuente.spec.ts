@@ -183,4 +183,36 @@ describe('ExcelFuente', () => {
     expect(lectura.errores).toEqual([{ fila: 2, motivo: 'monto inválido' }]);
     expect(lectura.ventas).toHaveLength(1);
   });
+
+  it('detecta y procesa libros de formato Fudo con hojas Ventas y Adiciones', async () => {
+    const libro = new ExcelJS.Workbook();
+    const hojaV = libro.addWorksheet('Ventas');
+    // Filas 1-3 metadatos
+    hojaV.addRow(['Desde', '01/10/2026']);
+    hojaV.addRow(['Hasta', '31/10/2026']);
+    hojaV.addRow([]);
+    // Fila 4 encabezados
+    hojaV.addRow(['Id', 'Fecha', 'Creación', 'Cerrada', 'Caja', 'Estado', 'Cliente', 'Mesa', 'Sala', 'Personas', 'Camarero', 'Medio de Pago', 'Total', 'Fiscal', 'Tipo de Venta', 'Comentario']);
+    // Fila 5 venta
+    hojaV.addRow([101, '2026-10-15', '2026-10-15T10:00:00Z', '', 'Principal', 'Cerrada', '9 8765 4321', '', '', '', '', 'Debito', 5000, 'Si', 'Mostrador', '']);
+
+    const hojaA = libro.addWorksheet('Adiciones');
+    // Fila 1 encabezados
+    hojaA.addRow(['Id. Venta', 'Creación', 'Producto', 'Categoría', 'Cantidad', 'Precio', 'Costo base', 'Costo mod', 'Costo total', 'Creada por', 'Cocina', 'Cancelada']);
+    hojaA.addRow([101, '2026-10-15T10:01:00Z', 'Cold Brew', 'Bebidas', 1, 3000, 0, 0, 0, 'admin', 'Cocina', 'No']);
+    hojaA.addRow([101, '2026-10-15T10:01:00Z', 'Croissant', 'Pasteleria', 1, 2000, 0, 0, 0, 'admin', 'Cocina', 'No']);
+
+    const buf = Buffer.from(await libro.xlsx.writeBuffer());
+    const info = await fuente.encabezados(buf);
+    expect(info.esFudo).toBe(true);
+
+    const lectura = await fuente.leer(buf);
+    expect(lectura.filasLeidas).toBe(1);
+    expect(lectura.ventas).toHaveLength(2);
+    expect(lectura.ventas[0].venta.producto).toBe('Cold Brew');
+    expect(lectura.ventas[0].venta.monto).toBe(3000);
+    expect(lectura.ventas[0].venta.telefono).toBe('+56987654321');
+    expect(lectura.ventas[1].venta.producto).toBe('Croissant');
+    expect(lectura.ventas[1].venta.monto).toBe(2000);
+  });
 });

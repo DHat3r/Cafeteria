@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import type { ClienteResumen, MensajeResponse } from '@cafeteria/shared';
+import type { ClienteResumen, MensajeResponse, RegistroClienteResponse } from '@cafeteria/shared';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CifradoService } from '../seguridad/cifrado.service.js';
 import { normalizarCorreo, normalizarTelefono } from '../seguridad/contacto.js';
@@ -24,7 +24,7 @@ export class ClientesService {
     private readonly cifrado: CifradoService,
   ) {}
 
-  async registrar(dto: RegistroClienteDto): Promise<MensajeResponse> {
+  async registrar(dto: RegistroClienteDto): Promise<RegistroClienteResponse> {
     const correo = dto.correo ? normalizarCorreo(dto.correo) : null;
     const telefono = dto.telefono ? normalizarTelefono(dto.telefono) : null;
     if (dto.correo && !correo) throw new BadRequestException('El correo no es válido');
@@ -40,18 +40,16 @@ export class ClientesService {
 
     const existente = await this.buscar(hmacs);
     if (existente) {
-      // Quien vuelve a registrarse solo renueva su consentimiento y se quita la baja. NO se cambian
-      // el nombre ni los contactos: cualquiera que conozca el correo o el teléfono de otra persona
-      // podría, si no, reemplazarle los datos y recibir sus ofertas.
       await this.prisma.cliente.update({
         where: { id: existente.id },
         data: { consentimientoEn: new Date(), bajaEn: null },
       });
       await this.asociarVentasPrevias(existente.id, existente);
-      return { mensaje: MENSAJE_REGISTRO };
+      return { mensaje: MENSAJE_REGISTRO, token: existente.tokenBaja };
     }
 
     try {
+      const token = randomBytes(24).toString('base64url');
       const nuevo = await this.prisma.cliente.create({
         data: {
           nombre: dto.nombre,
@@ -60,16 +58,101 @@ export class ClientesService {
           telefonoCifrado: telefono ? this.cifrado.cifrar(telefono) : null,
           telefonoHmac: hmacs.telefonoHmac,
           consentimientoEn: new Date(),
-          tokenBaja: randomBytes(24).toString('base64url'),
+          tokenBaja: token,
         },
       });
       await this.asociarVentasPrevias(nuevo.id, nuevo);
+      return { mensaje: MENSAJE_REGISTRO, token: nuevo.tokenBaja };
     } catch (error) {
-      // Dos registros simultáneos con el mismo contacto: el segundo choca con el índice único.
-      // El cliente ya quedó creado por el primero, así que se responde igual que siempre.
       if (!esViolacionUnica(error)) throw error;
+      const reintentado = await this.buscar(hmacs);
+      return { mensaje: MENSAJE_REGISTRO, token: reintentado?.tokenBaja };
     }
-    return { mensaje: MENSAJE_REGISTRO };
+  }
+
+  async obtenerPerfilSocio(token: string): Promise<import('@cafeteria/shared').SocioPerfilResponse> {
+    const cliente = await this.prisma.cliente.findUnique({
+      where: { tokenBaja: token },
+      include: {
+        ventas: {
+          orderBy: { fecha: 'desc' },
+          take: 10,
+          select: { fecha: true, producto: true, cantidad: true, monto: true },
+        },
+      },
+    });
+
+    if (!cliente) {
+      throw new BadRequestException('Socio no encontrado o enlace caducado');
+    }
+
+    // Calcular totales de compras
+    const agregados = await this.prisma.venta.aggregate({
+      where: { clienteId: cliente.id },
+      _count: { id: true },
+      _sum: { monto: true },
+    });
+
+    const totalCompras = agregados._count.id;
+    const montoTotal = agregados._sum.monto ?? 0;
+    // 1 punto por cada $1.000 consumidos
+    const puntos = Math.floor(montoTotal / 1000);
+
+    const correo = cliente.correoCifrado ? this.cifrado.descifrar(cliente.correoCifrado) : null;
+    const telefono = cliente.telefonoCifrado ? this.cifrado.descifrar(cliente.telefonoCifrado) : null;
+    const identificador = telefono ?? correo ?? `SOCIO-${cliente.id}`;
+
+    // Obtener últimas ofertas activas de la cafetería
+    const ofertasDb = await this.prisma.oferta.findMany({
+      orderBy: { creadoEn: 'desc' },
+      take: 5,
+    });
+
+    const ofertas = ofertasDb.map((o) => ({
+      id: o.id,
+      asunto: o.asunto,
+      mensaje: o.mensaje,
+      creadoEn: o.creadoEn.toISOString(),
+    }));
+
+    return {
+      nombre: cliente.nombre,
+      identificador,
+      correo,
+      telefono,
+      registradoEn: cliente.creadoEn.toISOString(),
+      puntos,
+      totalCompras,
+      montoTotal,
+      proximaRecompensaPuntos: 10,
+      ofertas,
+      ultimasCompras: cliente.ventas.map((v) => ({
+        fecha: v.fecha.toISOString(),
+        producto: v.producto,
+        cantidad: v.cantidad,
+        monto: v.monto,
+      })),
+    };
+  }
+
+  async consultarSocio(contactoCrudo: string): Promise<{ token?: string; mensaje?: string }> {
+    const correo = normalizarCorreo(contactoCrudo);
+    const telefono = normalizarTelefono(contactoCrudo);
+    if (!correo && !telefono) {
+      throw new BadRequestException('Ingresa un teléfono o correo válido');
+    }
+
+    const hmacs: Hmacs = {
+      correoHmac: correo ? this.cifrado.hmac(correo) : null,
+      telefonoHmac: telefono ? this.cifrado.hmac(telefono) : null,
+    };
+
+    const cliente = await this.buscar(hmacs);
+    if (!cliente) {
+      return { mensaje: 'No encontramos registros con este contacto. ¡Regístrate en el club para empezar a sumar puntos!' };
+    }
+
+    return { token: cliente.tokenBaja };
   }
 
   async darDeBaja(token: string): Promise<MensajeResponse> {
@@ -107,8 +190,6 @@ export class ClientesService {
     return this.prisma.cliente.findFirst({ where: { OR: condiciones } });
   }
 
-  // Ventas importadas antes de que el cliente se registrara. Se usan los contactos que el cliente
-  // TIENE guardados, no los que vinieron en esta petición (que pueden no ser suyos).
   private async asociarVentasPrevias(clienteId: number, { correoHmac, telefonoHmac }: Hmacs) {
     const condiciones = [...(correoHmac ? [{ correoHmac }] : []), ...(telefonoHmac ? [{ telefonoHmac }] : [])];
     if (condiciones.length === 0) return;

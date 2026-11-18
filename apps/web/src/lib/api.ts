@@ -49,8 +49,8 @@ async function mensajeDeError(respuesta: Response): Promise<string> {
   return "No se pudo completar la operación. Inténtalo de nuevo.";
 }
 
-export function apiGet<T>(ruta: string): Promise<T> {
-  return llamar<T>(ruta, {}, {});
+export function apiGet<T>(ruta: string, opciones: Opciones = {}): Promise<T> {
+  return llamar<T>(ruta, {}, opciones);
 }
 
 export function apiPost<T>(ruta: string, cuerpo: unknown, opciones: Opciones = {}): Promise<T> {

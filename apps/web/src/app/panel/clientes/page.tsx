@@ -67,6 +67,9 @@ export default async function PaginaClientes() {
                       Compras
                     </th>
                     <th scope="col" className="num">
+                      Puntos
+                    </th>
+                    <th scope="col" className="num">
                       Monto
                     </th>
                     <th scope="col">Última compra</th>
@@ -81,6 +84,7 @@ export default async function PaginaClientes() {
                       <td>{cliente.telefono ?? "—"}</td>
                       <td>{formatearFecha(cliente.registradoEn)}</td>
                       <td className="num">{cliente.compras}</td>
+                      <td className="num font-semibold text-cereza">{Math.floor(cliente.montoTotal / 1000)}</td>
                       <td className="num">{pesos(cliente.montoTotal)}</td>
                       <td>{cliente.ultimaCompra ? formatearFecha(cliente.ultimaCompra) : "—"}</td>
                       <td>

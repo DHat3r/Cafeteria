@@ -1,45 +1,44 @@
 @import "tailwindcss";
 
 /*
- * Tokens de diseño de la cafetería.
- * Porcelana fría de fondo, tinta espresso y un acento cereza (el fruto del café).
- * Los componentes usan solo estas variables; el modo oscuro las redefine abajo,
- * así ningún componente necesita clases dark:.
+ * Tokens de diseño de Cafetería Abril 1781.
+ * Fondo beige cálido (inspirado en el logo), acento verde bosque profundo,
+ * espresso intenso para tipografía y rosa elegante para fidelización.
  */
 :root {
-  --porcelana: #f1f3f0;
+  --porcelana: #f6f3eb;
   --superficie: #ffffff;
-  --superficie-2: #e8ebe6;
-  --linea: #d9ddd6;
-  --tinta: #2a1c15;
-  --tinta-suave: #6b5d55;
-  --cereza: #9c2b3c;
-  --cereza-fuerte: #7d1f2f;
-  --cereza-tenue: #f6e4e6;
-  /* Relleno de botones y cabeceras: siempre lleva texto blanco encima. */
-  --relleno: #9c2b3c;
-  --relleno-hover: #7d1f2f;
-  --grano: #5b3b2a;
-  --hoja: #3f6b4e;
-  --hoja-tenue: #e3eee6;
-  --alerta: #a3322a;
-  --alerta-tenue: #f8e3e0;
+  --superficie-2: #ede6d6;
+  --linea: #dfd6c4;
+  --tinta: #221a15;
+  --tinta-suave: #6e5d52;
+  --cereza: #d46979;
+  --cereza-fuerte: #be5363;
+  --cereza-tenue: #fae9ec;
+  /* Relleno principal: verde bosque profundo del logo Abril 1781 */
+  --relleno: #1f3322;
+  --relleno-hover: #162418;
+  --grano: #4e3526;
+  --hoja: #2b452f;
+  --hoja-tenue: #e2ede4;
+  --alerta: #b83d33;
+  --alerta-tenue: #fcedeb;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --porcelana: #1b1411;
-    --superficie: #251c18;
-    --superficie-2: #30251f;
-    --linea: #3d302a;
-    --tinta: #f2e9e3;
-    --tinta-suave: #b5a69c;
-    --cereza: #e0707f;
-    --cereza-fuerte: #ec8d99;
-    --cereza-tenue: #3a2025;
-    --relleno: #9a3243;
-    --relleno-hover: #b13d50;
-    --grano: #d2a98f;
+    --porcelana: #1a1714;
+    --superficie: #241f1a;
+    --superficie-2: #302a24;
+    --linea: #3d352e;
+    --tinta: #f6f3eb;
+    --tinta-suave: #b5a89e;
+    --cereza: #e07989;
+    --cereza-fuerte: #ec93a1;
+    --cereza-tenue: #3d2328;
+    --relleno: #2b452f;
+    --relleno-hover: #37593c;
+    --grano: #d7af95;
     --hoja: #8cc39d;
     --hoja-tenue: #1f2e24;
     --alerta: #f08c80;

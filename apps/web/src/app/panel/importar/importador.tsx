@@ -53,11 +53,13 @@ export function Importador() {
 
   function importar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
-    if (!archivo || !seleccion) return;
+    if (!archivo || (!encabezados?.esFudo && !seleccion)) return;
 
     const datos = new FormData();
     datos.append("archivo", archivo);
-    datos.append("mapeo", JSON.stringify(construirMapeo(seleccion)));
+    if (!encabezados?.esFudo && seleccion) {
+      datos.append("mapeo", JSON.stringify(construirMapeo(seleccion)));
+    }
 
     empezar(async () => {
       setMensaje(null);
@@ -134,9 +136,16 @@ export function Importador() {
     );
   }
 
-  if (paso === "columnas" && encabezados && seleccion) {
+  if (paso === "columnas" && encabezados) {
     return (
       <form onSubmit={importar} className="flex flex-col gap-6">
+        {encabezados.esFudo ? (
+          <div className="rounded-2xl border border-linea bg-superficie-2 p-4 text-sm text-tinta">
+            <span className="font-semibold text-cereza">✓ Formato Fudo detectado:</span> Se identificaron las hojas de
+            ventas y adiciones de productos. Se relacionarán automáticamente sin necesidad de configurar columnas manuales.
+          </div>
+        ) : null}
+
         <div>
           <h3 className="mb-2 font-medium">Primeras filas del archivo</h3>
           <Tabla>
@@ -161,28 +170,33 @@ export function Importador() {
           </Tabla>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {CAMPOS.map(({ clave, etiqueta, obligatorio }) => (
-            <label key={clave} className="flex flex-col gap-1 text-sm">
-              <span className="font-medium">{etiqueta}</span>
-              <select
-                value={seleccion[clave]}
-                onChange={(evento) => cambiarColumna(clave, evento.target.value)}
-                disabled={pendiente}
-                className={estiloCampo}
-              >
-                {!obligatorio && <option value="">(ninguna)</option>}
-                {encabezados.encabezados.map((encabezado, indice) => (
-                  <option key={indice} value={encabezado}>
-                    {encabezado}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
-        </div>
+        {!encabezados.esFudo && seleccion && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {CAMPOS.map(({ clave, etiqueta, obligatorio }) => (
+              <label key={clave} className="flex flex-col gap-1 text-sm">
+                <span className="font-medium">{etiqueta}</span>
+                <select
+                  value={seleccion[clave]}
+                  onChange={(evento) => cambiarColumna(clave, evento.target.value)}
+                  disabled={pendiente}
+                  className={estiloCampo}
+                >
+                  {!obligatorio && <option value="">(ninguna)</option>}
+                  {encabezados.encabezados.map((encabezado, indice) => (
+                    <option key={indice} value={encabezado}>
+                      {encabezado}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        )}
+
         <p className="text-xs text-tinta-suave">
-          Si el archivo no trae N° de boleta, evitamos duplicados comparando el contenido de cada fila.
+          {encabezados.esFudo
+            ? "Las ventas canceladas se omitirán y cada producto quedará registrado de forma única para evitar duplicados."
+            : "Si el archivo no trae N° de boleta, evitamos duplicados comparando el contenido de cada fila."}
         </p>
 
         {mensaje && <Mensaje ok={false}>{mensaje}</Mensaje>}
@@ -192,7 +206,7 @@ export function Importador() {
             Volver
           </Boton>
           <Boton type="submit" disabled={pendiente}>
-            {pendiente ? "Importando…" : "Importar ventas"}
+            {pendiente ? "Importando…" : encabezados.esFudo ? "Confirmar e importar Fudo" : "Importar ventas"}
           </Boton>
         </div>
       </form>

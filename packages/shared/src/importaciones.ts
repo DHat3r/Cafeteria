@@ -16,6 +16,7 @@ export type EncabezadosExcel = {
   // Primeras filas, como texto, para que el admin reconozca cada columna.
   muestra: Record<string, string>[];
   mapeoGuardado: MapeoColumnas | null;
+  esFudo?: boolean;
 };
 
 export type ErrorFila = {
