@@ -19,7 +19,7 @@ export function FormularioConsultaSocio() {
       />
       {estado && <Mensaje ok={estado.ok}>{estado.mensaje}</Mensaje>}
       <Boton type="submit" disabled={pendiente}>
-        {pendiente ? "Buscando…" : "Ver mi tarjeta y puntos"}
+        {pendiente ? "Enviando…" : "Enviarme el enlace a mi tarjeta"}
       </Boton>
     </form>
   );

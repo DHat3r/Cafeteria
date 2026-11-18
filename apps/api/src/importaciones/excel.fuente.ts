@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import ExcelJS from 'exceljs';
-import type { MapeoColumnas } from '@cafeteria/shared';
+import { createHash } from 'node:crypto';
+import type { ErrorFila, MapeoColumnas } from '@cafeteria/shared';
 import { normalizarCorreo, normalizarTelefono } from '../seguridad/contacto.js';
 import type { FuenteVentas, LecturaVentas } from './fuente-ventas.js';
-import { parsearCantidad, parsearFecha, parsearMonto, parsearTexto } from './valores.js';
+import { MAX_MONTO, parsearCantidad, parsearFecha, parsearMonto, parsearTexto } from './valores.js';
 
 type Celda = string | number | boolean | Date | null;
 type Fila = Record<string, Celda>;
@@ -73,6 +74,8 @@ export class ExcelFuente implements FuenteVentas {
   private leerFudo(libro: ExcelJS.Workbook, limite?: number): LecturaVentas {
     const hojaVentas = libro.getWorksheet('Ventas')!;
     const hojaAdic = libro.getWorksheet('Adiciones')!;
+    // Lo que no se puede importar se informa con su fila: callarlo dejaría al admin sin saber que faltan ventas.
+    const errores: ErrorFila[] = [];
 
     // 1. Encontrar la fila de encabezados en Ventas (suele ser fila 4 en Fudo)
     let filaHeaderVentas = 4;
@@ -104,46 +107,38 @@ export class ExcelFuente implements FuenteVentas {
     const colFecha = getCol(colVentas, 'fecha') ?? 2;
     const colEstado = getCol(colVentas, 'estado');
     const colCliente = getCol(colVentas, 'cliente');
-    const colTotal = getCol(colVentas, 'total') ?? 13;
     const colComentario = getCol(colVentas, 'comentario');
 
     type VentaFudo = {
-      id: string;
+      fila: number;
       fecha: Date;
-      total: number;
-      clienteCrudo: string | null;
-      comentarioCrudo: string | null;
       correo: string | null;
       telefono: string | null;
     };
 
+    let filasLeidas = 0;
     const ventasMap = new Map<string, VentaFudo>();
     hojaVentas.eachRow({ includeEmpty: false }, (fila, num) => {
       if (num <= filaHeaderVentas) return;
       const estado = colEstado ? textoVisible(valorCelda(fila.getCell(colEstado).value)).toLowerCase() : '';
       if (estado === 'anulada' || estado === 'cancelada') return;
 
+      // Sin Id no hay forma de relacionarla con sus productos (por ejemplo, una fila de totales al final).
       const id = textoVisible(valorCelda(fila.getCell(colId).value));
       if (!id) return;
 
+      filasLeidas++;
       const fecha = parsearFecha(valorCelda(fila.getCell(colFecha).value));
-      if (!fecha) return;
+      if (!fecha) {
+        errores.push({ fila: num, motivo: 'hoja Ventas: fecha inválida' });
+        return;
+      }
 
-      const total = parsearMonto(valorCelda(fila.getCell(colTotal).value)) ?? 0;
       const clienteCrudo = colCliente ? parsearTexto(valorCelda(fila.getCell(colCliente).value)) : null;
       const comentarioCrudo = colComentario ? parsearTexto(valorCelda(fila.getCell(colComentario).value)) : null;
-
       const { correo, telefono } = extraerContactos(clienteCrudo, comentarioCrudo);
 
-      ventasMap.set(id, {
-        id,
-        fecha,
-        total,
-        clienteCrudo,
-        comentarioCrudo,
-        correo,
-        telefono,
-      });
+      ventasMap.set(id, { fila: num, fecha, correo, telefono });
     });
 
     // 2. Leer Adiciones (productos consumidos)
@@ -164,6 +159,7 @@ export class ExcelFuente implements FuenteVentas {
     });
 
     const colAdicIdVenta = getCol(colAdic, 'id. venta', 'id venta', 'id') ?? 1;
+    const colAdicCreacion = getCol(colAdic, 'creación', 'creacion');
     const colAdicProducto = getCol(colAdic, 'producto', 'articulo', 'item') ?? 3;
     const colAdicCantidad = getCol(colAdic, 'cantidad', 'cant') ?? 5;
     const colAdicPrecio = getCol(colAdic, 'precio', 'total', 'monto') ?? 6;
@@ -172,7 +168,9 @@ export class ExcelFuente implements FuenteVentas {
     type ItemAdicion = {
       producto: string;
       cantidad: number;
-      precio: number;
+      monto: number;
+      // Identifica la línea por lo que es (producto, momento, cantidad y precio), no por su posición en la hoja.
+      huella: string;
     };
     const adicionesPorVenta = new Map<string, ItemAdicion[]>();
 
@@ -181,61 +179,71 @@ export class ExcelFuente implements FuenteVentas {
       const cancelada = colAdicCancelada ? textoVisible(valorCelda(fila.getCell(colAdicCancelada).value)).toLowerCase() : '';
       if (cancelada === 'si' || cancelada === 'sí' || cancelada === 'true') return;
 
+      // Una venta anulada o con fecha inválida ya no está en el mapa: sus productos se descartan a propósito.
       const idVenta = textoVisible(valorCelda(fila.getCell(colAdicIdVenta).value));
-      if (!idVenta || !ventasMap.has(idVenta)) return;
+      const venta = ventasMap.get(idVenta);
+      if (!venta) return;
 
       const producto = parsearTexto(valorCelda(fila.getCell(colAdicProducto).value));
-      if (!producto) return;
+      const cantidad = parsearCantidad(valorCelda(fila.getCell(colAdicCantidad).value));
+      const precio = parsearMonto(valorCelda(fila.getCell(colAdicPrecio).value));
+      const motivo = motivoDeError({ fecha: venta.fecha, producto, monto: precio, cantidad, idExterno: null });
+      if (motivo || !producto || precio === null || cantidad === null) {
+        errores.push({ fila: num, motivo: `hoja Adiciones: ${motivo ?? 'fila inválida'}` });
+        return;
+      }
 
-      const cantidad = parsearCantidad(valorCelda(fila.getCell(colAdicCantidad).value)) ?? 1;
-      const precio = parsearMonto(valorCelda(fila.getCell(colAdicPrecio).value)) ?? 0;
+      // SUPUESTO sin confirmar con un Excel real de Fudo: "Precio" es el precio de UNA unidad.
+      // Si fuera el total de la línea, el monto quedaría multiplicado por la cantidad.
+      const monto = Math.round(precio * cantidad);
+      if (monto > MAX_MONTO) {
+        errores.push({ fila: num, motivo: 'hoja Adiciones: monto demasiado alto' });
+        return;
+      }
+
+      const creacion = colAdicCreacion ? textoVisible(valorCelda(fila.getCell(colAdicCreacion).value)) : '';
+      const huella = createHash('sha256')
+        .update([producto, creacion, cantidad, precio].join('|'))
+        .digest('hex')
+        .slice(0, 12);
 
       const items = adicionesPorVenta.get(idVenta) ?? [];
-      items.push({ producto, cantidad, precio });
+      items.push({ producto, cantidad, monto, huella });
       adicionesPorVenta.set(idVenta, items);
     });
 
     // 3. Generar ventas normalizadas
-    const lectura: LecturaVentas = {
-      filasLeidas: ventasMap.size,
-      ventas: [],
-      errores: [],
-    };
+    const lectura: LecturaVentas = { filasLeidas, ventas: [], errores };
 
     let contador = 0;
     for (const [idVenta, venta] of ventasMap) {
       if (limite && contador >= limite) break;
       const items = adicionesPorVenta.get(idVenta);
 
-      if (items && items.length > 0) {
-        items.forEach((item, idx) => {
-          contador++;
-          const monto = Math.round(item.precio * item.cantidad);
-          lectura.ventas.push({
-            fila: contador,
-            venta: {
-              fecha: venta.fecha,
-              producto: item.producto,
-              cantidad: item.cantidad,
-              monto,
-              correo: venta.correo,
-              telefono: venta.telefono,
-              idExterno: `fudo:${idVenta}#${idx + 1}`,
-            },
-          });
-        });
-      } else {
+      // No se inventa un "consumo" con el total: si el detalle llega después, esa venta se duplicaría.
+      // Se avisa para que el admin exporte de nuevo cuando la venta ya tenga productos.
+      if (!items) {
+        errores.push({ fila: venta.fila, motivo: 'hoja Ventas: la venta no tiene productos en la hoja Adiciones' });
+        continue;
+      }
+
+      // Dos líneas idénticas de la misma venta (dos cafés iguales pedidos juntos) se distinguen con "#n".
+      const repetidas = new Map<string, number>();
+      for (const item of items) {
+        const clave = `fudo:${idVenta}:${item.huella}`;
+        const n = (repetidas.get(clave) ?? 0) + 1;
+        repetidas.set(clave, n);
         contador++;
         lectura.ventas.push({
           fila: contador,
           venta: {
             fecha: venta.fecha,
-            producto: 'Consumo Cafetería',
-            cantidad: 1,
-            monto: venta.total,
+            producto: item.producto,
+            cantidad: item.cantidad,
+            monto: item.monto,
             correo: venta.correo,
             telefono: venta.telefono,
-            idExterno: `fudo:${idVenta}`,
+            idExterno: `${clave}#${n}`,
           },
         });
       }
@@ -274,6 +282,7 @@ export class ExcelFuente implements FuenteVentas {
           producto,
           cantidad,
           monto,
+          // Un contacto mal escrito no invalida la venta: solo no se podrá asociar.
           correo: normalizarCorreo(correoCrudo),
           telefono: normalizarTelefono(telefonoCrudo),
           idExterno,

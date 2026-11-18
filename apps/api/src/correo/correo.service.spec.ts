@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { CorreoService, construirTexto, type MensajeCorreo, type TransporteCorreo } from './correo.service.js';
+import { CorreoService, construirTexto, construirTextoEnlaceTarjeta, type MensajeCorreo, type TransporteCorreo } from './correo.service.js';
 
 const remitente = 'Cafetería <ofertas@cafeteria.test>';
 
@@ -74,4 +74,41 @@ describe('CorreoService', () => {
       expect(sendMail).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('CorreoService.enviarEnlaceTarjeta', () => {
+  const enlace = { para: 'ana@mail.cl', nombre: 'Ana', enlace: 'https://cafeteria.test/socio/abc123' };
+
+  it('envía un correo transaccional con el enlace y sin encabezado List-Unsubscribe', async () => {
+    const sendMail = vi.fn<TransporteCorreo['sendMail']>().mockResolvedValue({});
+    const servicio = crearServicio(sendMail);
+
+    await servicio.enviarEnlaceTarjeta(enlace);
+
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(sendMail).toHaveBeenCalledWith({
+      from: remitente,
+      to: 'ana@mail.cl',
+      subject: 'Tu tarjeta de socio',
+      text: construirTextoEnlaceTarjeta('Ana', 'https://cafeteria.test/socio/abc123'),
+    });
+  });
+
+  it('el texto contiene el enlace y avisa que no hay que compartirlo', () => {
+    const texto = construirTextoEnlaceTarjeta('Ana', 'https://cafeteria.test/socio/abc123');
+
+    expect(texto).toContain('Hola Ana,');
+    expect(texto).toContain('https://cafeteria.test/socio/abc123');
+    expect(texto).toContain('No lo compartas');
+  });
+
+  it.each(['para', 'nombre'] as const)('rechaza un salto de línea en %s y no envía nada', async (campo) => {
+    const sendMail = vi.fn<TransporteCorreo['sendMail']>().mockResolvedValue({});
+    const servicio = crearServicio(sendMail);
+
+    await expect(servicio.enviarEnlaceTarjeta({ ...enlace, [campo]: 'Ana\r\nBcc: otro@mail.cl' })).rejects.toThrow(
+      'Dato de correo inválido',
+    );
+    expect(sendMail).not.toHaveBeenCalled();
+  });
 });

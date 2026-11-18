@@ -1,5 +1,6 @@
 import QRCode from "qrcode";
 import type { ClienteResumen } from "@cafeteria/shared";
+import { calcularPuntos } from "@cafeteria/shared";
 import { Mensaje, Tabla, Tarjeta, Titulo, pesos } from "@/components/ui";
 import { ApiError, apiGet } from "@/lib/api";
 
@@ -84,7 +85,7 @@ export default async function PaginaClientes() {
                       <td>{cliente.telefono ?? "—"}</td>
                       <td>{formatearFecha(cliente.registradoEn)}</td>
                       <td className="num">{cliente.compras}</td>
-                      <td className="num font-semibold text-cereza">{Math.floor(cliente.montoTotal / 1000)}</td>
+                      <td className="num font-semibold text-cereza">{calcularPuntos(cliente.montoTotal)}</td>
                       <td className="num">{pesos(cliente.montoTotal)}</td>
                       <td>{cliente.ultimaCompra ? formatearFecha(cliente.ultimaCompra) : "—"}</td>
                       <td>

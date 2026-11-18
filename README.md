@@ -7,7 +7,7 @@ Sistema de fidelización y email marketing para **Cafetería Abril 1781**: los c
 ## Qué hace
 
 1. **Registro por QR.** El cliente escanea el QR del local y se registra con nombre, correo o teléfono, y consentimiento explícito. Al terminar recibe su **tarjeta digital de socio** con puntos acumulados.
-2. **Portal de socio.** Desde `/socio` el cliente consulta su tarjeta, puntos y compras usando su correo o teléfono.
+2. **Portal de socio.** Desde `/socio` el cliente pide que le enviemos a su correo el enlace personal a su tarjeta, con sus puntos y compras. El enlace es el secreto: no se muestra nunca solo por saber un correo o un teléfono.
 3. **Importación desde Fudo.** El Excel exportado de Fudo (formato diario o mensual) se detecta automáticamente — sin mapeo manual. También acepta cualquier otro Excel con columnas personalizables.
 4. **Asociación.** Cada venta con correo o teléfono se vincula al cliente registrado, aunque el registro sea posterior a la venta.
 5. **Dashboard.** Ventas totales, ticket promedio, productos y clientes top en el rango de fechas que elijas.
@@ -74,7 +74,7 @@ Después de levantarlo:
    - **Con cualquier Excel:** sube el archivo y mapea las columnas manualmente.
 4. En **Resumen** elige el rango de fechas para ver el dashboard.
 5. En **Ofertas** crea una oferta segmentada (ej: «Clientes activos últimos 30 días») y revísala en Mailpit (http://localhost:8025).
-6. El cliente puede consultar su tarjeta y puntos en http://localhost:3000/socio.
+6. El cliente nuevo ve su tarjeta al registrarse. Quien vuelve pide el enlace en http://localhost:3000/socio y le llega al correo (en desarrollo, a Mailpit).
 
 ## Arquitectura
 
@@ -104,7 +104,8 @@ Más detalle del plan y de las reglas de negocio en `docs/PLAN_MVP.md`.
 - **Datos de contacto cifrados:** el correo y el teléfono de los clientes se guardan con AES-256-GCM (IV aleatorio). Un archivo `.db` copiado no revela contactos.
 - **Búsqueda sin texto plano:** los contactos se buscan con HMAC-SHA256 (con una clave aparte). Las ventas guardan solo ese HMAC, nunca el contacto.
 - **Sesión del administrador:** es un JWT en una cookie httpOnly que solo usa el servidor de Next. El login responde igual, y tarda lo mismo, si el correo no existe o si la contraseña es incorrecta.
-- **Registro con consentimiento:** exige consentimiento explícito. Responde lo mismo si el cliente ya existía, así que no revela quién está registrado. Registrarse de nuevo con un contacto existente solo renueva el consentimiento: no cambia el nombre ni los contactos, para que nadie pueda reemplazar los datos de otra persona conociendo su correo o teléfono.
+- **Registro con consentimiento:** exige consentimiento explícito. El mensaje es el mismo si el cliente ya existía. Registrarse de nuevo con un contacto existente solo renueva el consentimiento: no cambia el nombre ni los contactos, para que nadie pueda reemplazar los datos de otra persona conociendo su correo o teléfono.
+- **Tarjeta de socio con prueba de posesión:** saber el correo o el teléfono de alguien no prueba que seas esa persona. Por eso la tarjeta (`/socio/[token]`) se abre solo con un token secreto de 192 bits (`tokenTarjeta`), que solo se entrega al cliente que se acaba de crear y, después, por correo. `consultar-socio` responde siempre lo mismo y manda el enlace sin esperar al servidor de correo, para que ni la respuesta ni el tiempo delaten quién es socio. Es un token distinto del de baja (que viaja en cada correo de ofertas y no abre la tarjeta). Una limitación conocida: quien conozca un contacto *nuevo* puede registrarse con él antes que su dueño; el registro con un contacto ya existente sí queda protegido.
 - **Baja segura:** es un POST con confirmación y un token aleatorio. Así, los antivirus de correo que abren enlaces no dan de baja a nadie.
 - **Correos:** cada correo lleva enlace de baja y el encabezado `List-Unsubscribe`. El destinatario, el asunto y el nombre se validan contra saltos de línea para evitar inyección de encabezados.
 - **Logs:** no incluyen datos personales.
@@ -166,7 +167,9 @@ Para ver los correos sin Docker, levanta solo Mailpit con `docker compose up -d 
 Lo que está fuera del MVP actual o queda pendiente:
 
 - **Email en producción:** en desarrollo los correos los atrapa Mailpit (no salen). Para producción hay que configurar `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` y `SMTP_PASS` en `.env` apuntando a un proveedor real (Brevo, SendGrid, etc.).
-- Sin límite de peticiones (*rate limiting*) en el registro público ni en el login.
+- **Límite de peticiones:** el registro (20 por minuto) y `consultar-socio` (5 por minuto) tienen tope. Como la web llama a la API desde un solo servidor, el tope es global por ruta, no por cliente. El login no tiene límite todavía.
+- **Socios sin correo:** quien se registró solo con teléfono no puede recuperar su tarjeta por la web (no hay SMS); debe pedirla en caja.
+- **Importación Fudo:** se supone que `Precio` en la hoja Adiciones es el precio de una unidad (el monto es `Precio × Cantidad`). Falta confirmarlo con un Excel real de Fudo. Las ventas sin productos en Adiciones no se importan y se informan como error.
 - Sin doble confirmación del correo (*double opt-in*).
 - Cerrar sesión borra la cookie, pero el token no se revoca: sigue siendo válido hasta que vence (8 horas).
 - Las fechas de ventas se interpretan en hora de Chile (`America/Santiago`, fijo en `apps/api/src/comun/hora.ts`).
