@@ -30,6 +30,11 @@ model Cliente {
   consentimientoEn DateTime
   bajaEn           DateTime?
   tokenBaja        String    @unique
+  // Secreto de la tarjeta de socio (/socio/[token]). Va aparte de tokenBaja: ese viaja en cada correo de
+  // ofertas y sirve para darse de baja; este solo se entrega por correo al dueño del contacto.
+  // Es opcional solo porque SQLite no permite agregar una columna única NOT NULL a una tabla con filas;
+  // la migración rellena los clientes existentes y el servicio lo asigna siempre al crear.
+  tokenTarjeta     String?   @unique
   creadoEn         DateTime  @default(now())
   ventas           Venta[]
 }

@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
@@ -27,11 +28,17 @@ export function crearTransporteFalso() {
 
 // Levanta la app completa contra la base temporal de los e2e.
 // Los tests nunca envían correos de verdad: usan un transporte falso.
-export async function crearApp(transporte: TransporteCorreo = crearTransporteFalso()): Promise<INestApplication<App>> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+// Con `conLimites: false` (lo normal) se apaga el límite de peticiones: los tests registran decenas de clientes
+// en un minuto. Solo el test de límites lo deja encendido, para probar el mismo guard que corre en producción.
+export async function crearApp(
+  transporte: TransporteCorreo = crearTransporteFalso(),
+  { conLimites = false }: { conLimites?: boolean } = {},
+): Promise<INestApplication<App>> {
+  const constructor = Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(TRANSPORTE_CORREO)
-    .useValue(transporte)
-    .compile();
+    .useValue(transporte);
+  if (!conLimites) constructor.overrideGuard(ThrottlerGuard).useValue({ canActivate: () => true });
+  const moduleRef = await constructor.compile();
   const app = moduleRef.createNestApplication<INestApplication<App>>();
   configureApp(app);
   await app.init();

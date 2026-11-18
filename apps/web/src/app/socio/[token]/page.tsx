@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { SocioPerfilResponse } from "@cafeteria/shared";
-import { GranoCafe, Tarjeta } from "@/components/ui";
+import { PESOS_POR_PUNTO } from "@cafeteria/shared";
+import { GranoCafe, Tarjeta, pesos } from "@/components/ui";
 import { apiGet } from "@/lib/api";
 
 export const metadata = { title: "Mi Tarjeta de Fidelización | Cafetería" };
@@ -92,7 +93,7 @@ export default async function PaginaSocio({ params }: { params: Promise<{ token:
           <p className="text-xs text-tinta-suave">
             {faltan === 0 || socio.puntos >= socio.proximaRecompensaPuntos
               ? "¡Tienes recompensas disponibles para canjear en tu próxima visita!"
-              : `Te faltan ${faltan} puntos (${faltan} compras de $1.000) para tu próxima recompensa.`}
+              : `Te faltan ${faltan} puntos (${faltan} compras de ${pesos(PESOS_POR_PUNTO)}) para tu próxima recompensa.`}
           </p>
         </div>
       </Tarjeta>
@@ -144,7 +145,7 @@ export default async function PaginaSocio({ params }: { params: Promise<{ token:
 
       <footer className="text-center text-xs text-tinta-suave">
         ¿Quieres dejar de recibir ofertas?{" "}
-        <Link href={`/baja/${token}`} className="underline hover:text-cereza">
+        <Link href={`/baja/${socio.tokenBaja}`} className="underline hover:text-cereza">
           Darte de baja
         </Link>
       </footer>

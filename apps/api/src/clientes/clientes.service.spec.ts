@@ -23,7 +23,9 @@ function crearServicio(errorAlCrear: Error) {
     },
     venta: { updateMany: vi.fn() },
   };
-  return { servicio: new ClientesService(prisma as never, cifrado), prisma };
+  const correo = { enviarEnlaceTarjeta: vi.fn().mockResolvedValue(undefined) };
+  const config = new ConfigService({ PUBLIC_WEB_URL: 'https://cafeteria.test' });
+  return { servicio: new ClientesService(prisma as never, cifrado, correo as never, config as never), prisma };
 }
 
 describe('ClientesService.registrar', () => {
@@ -33,6 +35,7 @@ describe('ClientesService.registrar', () => {
     const respuesta = await servicio.registrar(dto);
 
     expect(respuesta.mensaje).toContain('Te avisaremos');
+    expect(respuesta.token).toBeUndefined();
     expect(prisma.cliente.create).toHaveBeenCalledTimes(1);
   });
 

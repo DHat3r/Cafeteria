@@ -11,7 +11,8 @@ export type MensajeResponse = {
   mensaje: string;
 };
 
-// Respuesta de registro que incluye el token para acceder a la tarjeta de socio.
+// Respuesta del registro. `token` (el de la tarjeta de socio) solo viene cuando el cliente se acaba de crear:
+// a quien se registra con un contacto que ya existía nunca se le entrega, porque no prueba que sea suyo.
 export type RegistroClienteResponse = {
   mensaje: string;
   token?: string;
@@ -57,9 +58,11 @@ export type SocioPerfilResponse = {
   proximaRecompensaPuntos: number;
   ofertas: OfertaSocioResumen[];
   ultimasCompras: CompraSocioResumen[];
+  // Para el enlace "darte de baja" de la tarjeta: el token de la tarjeta no sirve en /baja.
+  tokenBaja: string;
 };
 
-// POST /api/clientes/consultar-socio
+// POST /api/clientes/consultar-socio: responde siempre MensajeResponse, exista o no el contacto.
 export type ConsultaSocioRequest = {
   contacto: string;
 };

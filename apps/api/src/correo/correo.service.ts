@@ -38,6 +38,27 @@ export function construirTexto(nombre: string, mensaje: string, enlaceBaja: stri
   );
 }
 
+export type EnlaceTarjeta = {
+  para: string;
+  nombre: string;
+  enlace: string;
+};
+
+// Función pura y exportada: texto plano del correo que entrega el enlace a la tarjeta de socio.
+export function construirTextoEnlaceTarjeta(nombre: string, enlace: string): string {
+  return (
+    `Hola ${nombre},` +
+    '\n\n' +
+    'Pediste ver tu tarjeta de socio. Entra desde este enlace personal:' +
+    '\n' +
+    enlace +
+    '\n\n' +
+    'No lo compartas: cualquiera que lo tenga puede ver tus puntos y tus compras.' +
+    '\n' +
+    'Si no lo pediste tú, puedes ignorar este correo.'
+  );
+}
+
 // Un salto de línea en un encabezado permite inyectar otros encabezados (por ejemplo Bcc).
 const SALTO_DE_LINEA = /[\r\n]/;
 
@@ -60,6 +81,20 @@ export class CorreoService {
       subject: m.asunto,
       text: construirTexto(m.nombre, m.mensaje, m.enlaceBaja),
       headers: { 'List-Unsubscribe': `<${m.enlaceBaja}>` },
+    });
+  }
+
+  // Correo transaccional (no es una oferta): lleva el enlace a la tarjeta, sin enlace de baja.
+  async enviarEnlaceTarjeta(m: EnlaceTarjeta): Promise<void> {
+    if ([m.para, m.nombre].some((valor) => SALTO_DE_LINEA.test(valor))) {
+      throw new Error('Dato de correo inválido');
+    }
+
+    await this.transporte.sendMail({
+      from: this.config.get('MAIL_FROM', { infer: true }),
+      to: m.para,
+      subject: 'Tu tarjeta de socio',
+      text: construirTextoEnlaceTarjeta(m.nombre, m.enlace),
     });
   }
 }

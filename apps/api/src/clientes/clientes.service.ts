@@ -1,6 +1,19 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
-import type { ClienteResumen, MensajeResponse, RegistroClienteResponse } from '@cafeteria/shared';
+import type {
+  ClienteResumen,
+  MensajeResponse,
+  OfertaSocioResumen,
+  RegistroClienteResponse,
+  Segmento,
+  SocioPerfilResponse,
+} from '@cafeteria/shared';
+import { calcularPuntos } from '@cafeteria/shared';
+import { horaDePared } from '../comun/hora.js';
+import type { Env } from '../config/env.js';
+import { CorreoService } from '../correo/correo.service.js';
+import { filtrarSegmento, type ClienteSegmentable } from '../ofertas/filtrar-segmento.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CifradoService } from '../seguridad/cifrado.service.js';
 import { normalizarCorreo, normalizarTelefono } from '../seguridad/contacto.js';
@@ -9,6 +22,14 @@ import { RegistroClienteDto } from './registro-cliente.dto.js';
 // Misma respuesta si el cliente es nuevo o ya existía: no revela quién está registrado.
 const MENSAJE_REGISTRO = '¡Listo! Te avisaremos de nuestras ofertas.';
 const MENSAJE_BAJA = 'Listo, ya no recibirás más ofertas.';
+// Igual exista o no el contacto: quien consulta no averigua quién es socio. El enlace viaja solo por correo,
+// así que solo lo recibe el dueño de ese correo (prueba de posesión).
+const MENSAJE_CONSULTA =
+  'Si ese contacto está registrado con un correo, te enviamos el enlace a tu tarjeta. ' +
+  'Si te registraste solo con teléfono, pídela en caja.';
+
+// Los tokens se generan con 24 bytes aleatorios (192 bits): no se pueden adivinar.
+const nuevoToken = () => randomBytes(24).toString('base64url');
 
 type Hmacs = { correoHmac: string | null; telefonoHmac: string | null };
 
@@ -19,9 +40,13 @@ function esViolacionUnica(error: unknown): boolean {
 
 @Injectable()
 export class ClientesService {
+  private readonly logger = new Logger(ClientesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly cifrado: CifradoService,
+    private readonly correo: CorreoService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   async registrar(dto: RegistroClienteDto): Promise<RegistroClienteResponse> {
@@ -40,16 +65,21 @@ export class ClientesService {
 
     const existente = await this.buscar(hmacs);
     if (existente) {
+      // Quien vuelve a registrarse solo renueva su consentimiento y se quita la baja. NO se cambian
+      // el nombre ni los contactos: cualquiera que conozca el correo o el teléfono de otra persona
+      // podría, si no, reemplazarle los datos y recibir sus ofertas.
       await this.prisma.cliente.update({
         where: { id: existente.id },
         data: { consentimientoEn: new Date(), bajaEn: null },
       });
       await this.asociarVentasPrevias(existente.id, existente);
-      return { mensaje: MENSAJE_REGISTRO, token: existente.tokenBaja };
+      // Sin token en la respuesta: saber el correo o el teléfono de alguien no prueba que seas esa persona.
+      // El enlace a su tarjeta le llega al correo que ya tenía guardado.
+      void this.enviarEnlaceTarjeta(existente);
+      return { mensaje: MENSAJE_REGISTRO };
     }
 
     try {
-      const token = randomBytes(24).toString('base64url');
       const nuevo = await this.prisma.cliente.create({
         data: {
           nombre: dto.nombre,
@@ -58,62 +88,43 @@ export class ClientesService {
           telefonoCifrado: telefono ? this.cifrado.cifrar(telefono) : null,
           telefonoHmac: hmacs.telefonoHmac,
           consentimientoEn: new Date(),
-          tokenBaja: token,
+          tokenBaja: nuevoToken(),
+          tokenTarjeta: nuevoToken(),
         },
       });
       await this.asociarVentasPrevias(nuevo.id, nuevo);
-      return { mensaje: MENSAJE_REGISTRO, token: nuevo.tokenBaja };
+      // Es el único caso en que se entrega el token: el cliente lo acaba de crear esta misma persona.
+      return { mensaje: MENSAJE_REGISTRO, token: nuevo.tokenTarjeta ?? undefined };
     } catch (error) {
+      // Dos registros simultáneos con el mismo contacto: el segundo choca con el índice único.
+      // El cliente ya quedó creado por el primero; se responde igual, sin token.
       if (!esViolacionUnica(error)) throw error;
-      const reintentado = await this.buscar(hmacs);
-      return { mensaje: MENSAJE_REGISTRO, token: reintentado?.tokenBaja };
     }
+    return { mensaje: MENSAJE_REGISTRO };
   }
 
-  async obtenerPerfilSocio(token: string): Promise<import('@cafeteria/shared').SocioPerfilResponse> {
+  async obtenerPerfilSocio(token: string): Promise<SocioPerfilResponse> {
     const cliente = await this.prisma.cliente.findUnique({
-      where: { tokenBaja: token },
+      where: { tokenTarjeta: token },
       include: {
         ventas: {
           orderBy: { fecha: 'desc' },
-          take: 10,
           select: { fecha: true, producto: true, cantidad: true, monto: true },
         },
       },
     });
 
     if (!cliente) {
-      throw new BadRequestException('Socio no encontrado o enlace caducado');
+      throw new NotFoundException('Socio no encontrado o enlace caducado');
     }
 
-    // Calcular totales de compras
-    const agregados = await this.prisma.venta.aggregate({
-      where: { clienteId: cliente.id },
-      _count: { id: true },
-      _sum: { monto: true },
-    });
-
-    const totalCompras = agregados._count.id;
-    const montoTotal = agregados._sum.monto ?? 0;
-    // 1 punto por cada $1.000 consumidos
-    const puntos = Math.floor(montoTotal / 1000);
+    const totalCompras = cliente.ventas.length;
+    const montoTotal = cliente.ventas.reduce((suma, v) => suma + v.monto, 0);
+    const puntos = calcularPuntos(montoTotal);
 
     const correo = cliente.correoCifrado ? this.cifrado.descifrar(cliente.correoCifrado) : null;
     const telefono = cliente.telefonoCifrado ? this.cifrado.descifrar(cliente.telefonoCifrado) : null;
     const identificador = telefono ?? correo ?? `SOCIO-${cliente.id}`;
-
-    // Obtener últimas ofertas activas de la cafetería
-    const ofertasDb = await this.prisma.oferta.findMany({
-      orderBy: { creadoEn: 'desc' },
-      take: 5,
-    });
-
-    const ofertas = ofertasDb.map((o) => ({
-      id: o.id,
-      asunto: o.asunto,
-      mensaje: o.mensaje,
-      creadoEn: o.creadoEn.toISOString(),
-    }));
 
     return {
       nombre: cliente.nombre,
@@ -125,17 +136,18 @@ export class ClientesService {
       totalCompras,
       montoTotal,
       proximaRecompensaPuntos: 10,
-      ofertas,
-      ultimasCompras: cliente.ventas.map((v) => ({
+      ofertas: await this.ofertasPara({ bajaEn: cliente.bajaEn, compras: cliente.ventas }),
+      ultimasCompras: cliente.ventas.slice(0, 10).map((v) => ({
         fecha: v.fecha.toISOString(),
         producto: v.producto,
         cantidad: v.cantidad,
         monto: v.monto,
       })),
+      tokenBaja: cliente.tokenBaja,
     };
   }
 
-  async consultarSocio(contactoCrudo: string): Promise<{ token?: string; mensaje?: string }> {
+  async consultarSocio(contactoCrudo: string): Promise<MensajeResponse> {
     const correo = normalizarCorreo(contactoCrudo);
     const telefono = normalizarTelefono(contactoCrudo);
     if (!correo && !telefono) {
@@ -148,11 +160,9 @@ export class ClientesService {
     };
 
     const cliente = await this.buscar(hmacs);
-    if (!cliente) {
-      return { mensaje: 'No encontramos registros con este contacto. ¡Regístrate en el club para empezar a sumar puntos!' };
-    }
-
-    return { token: cliente.tokenBaja };
+    // Sin esperar al SMTP: si solo respondiera lento cuando el contacto existe, el tiempo delataría quién es socio.
+    if (cliente) void this.enviarEnlaceTarjeta(cliente);
+    return { mensaje: MENSAJE_CONSULTA };
   }
 
   async darDeBaja(token: string): Promise<MensajeResponse> {
@@ -185,11 +195,45 @@ export class ClientesService {
     });
   }
 
+  // Las últimas ofertas que este cliente habría recibido por correo. Una oferta dirigida a otro segmento
+  // (por ejemplo "quienes compraron X") no se le muestra a quien no pertenece a él.
+  private async ofertasPara(cliente: ClienteSegmentable): Promise<OfertaSocioResumen[]> {
+    const ofertas = await this.prisma.oferta.findMany({ orderBy: { creadoEn: 'desc' }, take: 20 });
+    const ahora = horaDePared(new Date());
+    return ofertas
+      .filter((o) => filtrarSegmento([cliente], JSON.parse(o.segmento) as Segmento, ahora).length > 0)
+      .slice(0, 5)
+      .map((o) => ({ id: o.id, asunto: o.asunto, mensaje: o.mensaje, creadoEn: o.creadoEn.toISOString() }));
+  }
+
+  // Manda el enlace a la tarjeta al correo guardado del cliente. Un fallo del SMTP no debe romper la respuesta
+  // (ni delatar nada): solo se registra el id del cliente, nunca su correo ni su nombre.
+  private async enviarEnlaceTarjeta(cliente: {
+    id: number;
+    nombre: string;
+    correoCifrado: string | null;
+    tokenTarjeta: string | null;
+  }): Promise<void> {
+    if (!cliente.correoCifrado || !cliente.tokenTarjeta) return;
+    try {
+      const urlWeb = this.config.get('PUBLIC_WEB_URL', { infer: true });
+      await this.correo.enviarEnlaceTarjeta({
+        para: this.cifrado.descifrar(cliente.correoCifrado),
+        nombre: cliente.nombre,
+        enlace: `${urlWeb}/socio/${cliente.tokenTarjeta}`,
+      });
+    } catch {
+      this.logger.warn(`No se pudo enviar el enlace de la tarjeta al cliente ${cliente.id}`);
+    }
+  }
+
   private buscar({ correoHmac, telefonoHmac }: Hmacs) {
     const condiciones = [...(correoHmac ? [{ correoHmac }] : []), ...(telefonoHmac ? [{ telefonoHmac }] : [])];
     return this.prisma.cliente.findFirst({ where: { OR: condiciones } });
   }
 
+  // Ventas importadas antes de que el cliente se registrara. Se usan los contactos que el cliente
+  // TIENE guardados, no los que vinieron en esta petición (que pueden no ser suyos).
   private async asociarVentasPrevias(clienteId: number, { correoHmac, telefonoHmac }: Hmacs) {
     const condiciones = [...(correoHmac ? [{ correoHmac }] : []), ...(telefonoHmac ? [{ telefonoHmac }] : [])];
     if (condiciones.length === 0) return;
